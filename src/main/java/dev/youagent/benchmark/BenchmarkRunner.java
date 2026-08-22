@@ -27,7 +27,8 @@ public final class BenchmarkRunner {
         Path tasksFile = projectRoot.resolve("benchmarks/tasks.json");
         List<BenchmarkCase> cases = mapper.readValue(tasksFile.toFile(), new TypeReference<>() { });
         if (cases.size() < 20 || cases.size() > 30) {
-            throw new IllegalStateException("benchmark must contain 20-30 fixed tasks, found " + cases.size());
+            throw new IllegalStateException("deterministic offline conformance benchmark must contain 20-30 "
+                    + "fixed tasks, found " + cases.size());
         }
         List<BenchmarkResult> results = new ArrayList<>();
         for (BenchmarkCase benchmark : cases) {

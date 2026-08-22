@@ -23,6 +23,16 @@ authoritative.
 | JUnit Jupiter | 5.11.0 | Eclipse Public License 2.0 |
 | MockWebServer | 4.12.0 | Apache License 2.0 |
 
+## Build and quality tooling
+
+| Component | Version | License |
+|---|---:|---|
+| Apache Maven | 3.9.11 bootstrap | Apache License 2.0 |
+| Maven Compiler Plugin | 3.13.0 | Apache License 2.0 |
+| Maven Surefire Plugin | 3.5.0 | Apache License 2.0 |
+| Maven Shade Plugin | 3.6.0 | Apache License 2.0 |
+| JaCoCo Maven Plugin | 0.8.12 | Eclipse Public License 2.0 |
+
 License texts and project information:
 
 - Apache License 2.0: https://www.apache.org/licenses/LICENSE-2.0

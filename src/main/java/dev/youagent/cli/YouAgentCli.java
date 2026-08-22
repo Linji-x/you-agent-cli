@@ -331,7 +331,7 @@ public final class YouAgentCli {
 
                 Commands:
                   --demo                 offline input -> plan -> tools -> result demo
-                  --benchmark            run 25 fixed offline experiments and write reports
+                  --benchmark            run the 25-task deterministic offline conformance benchmark
                   --retrieval-eval       run the labeled code-retrieval evaluation
                   --eval                 run real model-backed agent tasks (credentials required)
                   --once <task>          run one ReAct task with configured provider
