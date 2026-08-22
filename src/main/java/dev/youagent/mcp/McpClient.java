@@ -6,6 +6,8 @@ import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
 import java.io.IOException;
+import java.io.InterruptedIOException;
+import java.net.SocketTimeoutException;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
@@ -112,7 +114,14 @@ public final class McpClient implements AutoCloseable {
         request.put("id", ids.getAndIncrement());
         request.put("method", method);
         request.set("params", params);
-        return transport.request(request, timeout);
+        try {
+            return transport.request(request, timeout);
+        } catch (IOException failure) {
+            if (lifecycle == McpLifecycle.READY && isTimeout(failure)) {
+                failAndClose(failure);
+            }
+            throw failure;
+        }
     }
 
     private ObjectNode notification(String method, JsonNode params) {
@@ -138,6 +147,33 @@ public final class McpClient implements AutoCloseable {
         if (lifecycle != McpLifecycle.READY) {
             throw new IOException("MCP client is not ready: " + lifecycle);
         }
+    }
+
+    private synchronized void failAndClose(IOException failure) {
+        lifecycle = McpLifecycle.FAILED;
+        try {
+            transport.close();
+        } catch (IOException closeFailure) {
+            failure.addSuppressed(closeFailure);
+        }
+    }
+
+    private static boolean isTimeout(Throwable failure) {
+        Throwable current = failure;
+        while (current != null) {
+            if (current instanceof SocketTimeoutException || current instanceof InterruptedIOException) {
+                return true;
+            }
+            String message = current.getMessage();
+            if (message != null) {
+                String lower = message.toLowerCase();
+                if (lower.contains("timed out") || lower.contains("timeout")) {
+                    return true;
+                }
+            }
+            current = current.getCause();
+        }
+        return false;
     }
 
     private static Duration remaining(long deadline) throws IOException {

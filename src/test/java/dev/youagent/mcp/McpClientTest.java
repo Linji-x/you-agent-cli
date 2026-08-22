@@ -41,17 +41,35 @@ class McpClientTest {
         assertTrue(transport.closed);
     }
 
+    @Test
+    void toolCallTimeoutFailsClientAndImmediatelyClosesTransport() throws Exception {
+        FakeTransport transport = new FakeTransport();
+        McpClient client = new McpClient("demo", transport);
+        client.start(Duration.ofSeconds(1));
+        transport.timeoutToolCalls = true;
+
+        assertThrows(java.net.SocketTimeoutException.class, () -> client.callTool("echo",
+                transport.mapper.createObjectNode().put("text", "hello"), Duration.ofMillis(50)));
+
+        assertEquals(McpLifecycle.FAILED, client.lifecycle());
+        assertTrue(transport.closed);
+    }
+
     private static final class FakeTransport implements McpTransport {
         private final ObjectMapper mapper = new ObjectMapper();
         private boolean started;
         private boolean initializedNotification;
         private boolean closed;
         private String protocolVersion = McpClient.PROTOCOL_VERSION;
+        private boolean timeoutToolCalls;
 
         @Override public void start(Duration timeout) { started = true; }
 
         @Override
-        public JsonNode request(ObjectNode message, Duration timeout) {
+        public JsonNode request(ObjectNode message, Duration timeout) throws java.io.IOException {
+            if (timeoutToolCalls && message.path("method").asText().equals("tools/call")) {
+                throw new java.net.SocketTimeoutException("simulated tool timeout");
+            }
             ObjectNode response = mapper.createObjectNode();
             response.set("id", message.path("id"));
             ObjectNode result = response.putObject("result");
