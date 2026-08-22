@@ -91,7 +91,7 @@ public final class YouAgentCli {
 
     private static int repl(Path workspace) throws Exception {
         AppConfig config = AppConfig.load(workspace);
-        System.out.println("You Agent CLI 0.1.0 | Java 17 | workspace=" + workspace.toAbsolutePath().normalize());
+        System.out.println("You Agent CLI 0.2.0-SNAPSHOT | Java 17 | workspace=" + workspace.toAbsolutePath().normalize());
         System.out.println("Type /help or /exit.");
         BufferedReader input = new BufferedReader(new InputStreamReader(System.in, StandardCharsets.UTF_8));
         while (true) {
@@ -169,7 +169,8 @@ public final class YouAgentCli {
 
     private static int runBenchmark(Path workspace) throws Exception {
         BenchmarkReport report = new BenchmarkRunner().run(workspace.toAbsolutePath().normalize());
-        System.out.println("Benchmark: " + report.passed() + "/" + report.total() + " passed");
+        System.out.println("Deterministic offline conformance benchmark: "
+                + report.passed() + "/" + report.total() + " passed");
         System.out.println("Report: benchmarks/results/latest.md");
         return report.passed() == report.total() ? 0 : 1;
     }

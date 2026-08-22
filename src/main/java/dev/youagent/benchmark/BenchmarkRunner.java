@@ -53,7 +53,7 @@ public final class BenchmarkRunner {
         Path resultsDirectory = projectRoot.resolve("benchmarks/results");
         Files.createDirectories(resultsDirectory);
         mapper.writeValue(resultsDirectory.resolve("latest.json").toFile(), report);
-        StringBuilder markdown = new StringBuilder("# Offline benchmark results\n\n")
+        StringBuilder markdown = new StringBuilder("# Deterministic offline conformance benchmark results\n\n")
                 .append("- Generated: `").append(report.generatedAt()).append("`\n")
                 .append("- Runtime: Java `").append(report.javaVersion()).append("` on `").append(report.os()).append("`\n")
                 .append("- Result: **").append(report.passed()).append('/').append(report.total()).append(" passed**\n\n")

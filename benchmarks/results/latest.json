@@ -1,5 +1,5 @@
 {
-  "generatedAt" : "2026-08-22T12:22:15.585147200Z",
+  "generatedAt" : "2026-08-22T15:49:13.327385100Z",
   "javaVersion" : "17.0.16",
   "os" : "Windows 11 amd64",
   "total" : 25,
@@ -8,56 +8,56 @@
     "id" : "R01",
     "category" : "ReAct",
     "passed" : true,
-    "durationMs" : 88,
+    "durationMs" : 130,
     "evidence" : "COMPLETED in 2 rounds; tool result present",
     "error" : ""
   }, {
     "id" : "R02",
     "category" : "ReAct",
     "passed" : true,
-    "durationMs" : 3,
+    "durationMs" : 6,
     "evidence" : "MAX_ROUNDS at round 2",
     "error" : ""
   }, {
     "id" : "R03",
     "category" : "ReAct",
     "passed" : true,
-    "durationMs" : 6,
+    "durationMs" : 7,
     "evidence" : "REPEATED_FAILURE after 3 identical failures",
     "error" : ""
   }, {
     "id" : "R04",
     "category" : "ReAct",
     "passed" : true,
-    "durationMs" : 0,
+    "durationMs" : 1,
     "evidence" : "COMPLETED in 1 round with no tools",
     "error" : ""
   }, {
     "id" : "R05",
     "category" : "ReAct",
     "passed" : true,
-    "durationMs" : 1,
+    "durationMs" : 2,
     "evidence" : "INVALID_ARGUMENTS fed back; next round COMPLETED",
     "error" : ""
   }, {
     "id" : "D01",
     "category" : "DAG",
     "passed" : true,
-    "durationMs" : 3,
+    "durationMs" : 7,
     "evidence" : "inspect -> generate -> verify",
     "error" : ""
   }, {
     "id" : "D02",
     "category" : "DAG",
     "passed" : true,
-    "durationMs" : 1,
+    "durationMs" : 2,
     "evidence" : "root=FAILED; child=BLOCKED",
     "error" : ""
   }, {
     "id" : "D03",
     "category" : "DAG",
     "passed" : true,
-    "durationMs" : 0,
+    "durationMs" : 1,
     "evidence" : "cycle rejected: cycle detected: a -> b -> a",
     "error" : ""
   }, {
@@ -71,77 +71,77 @@
     "id" : "D05",
     "category" : "DAG",
     "passed" : true,
-    "durationMs" : 0,
+    "durationMs" : 1,
     "evidence" : "left and right SUCCEEDED",
     "error" : ""
   }, {
     "id" : "M01",
     "category" : "Memory",
     "passed" : true,
-    "durationMs" : 30,
+    "durationMs" : 57,
     "evidence" : "1 fact visible after reopen",
     "error" : ""
   }, {
     "id" : "M02",
     "category" : "Memory",
     "passed" : true,
-    "durationMs" : 18,
+    "durationMs" : 20,
     "evidence" : "alpha sees global+alpha only",
     "error" : ""
   }, {
     "id" : "M03",
     "category" : "Memory",
     "passed" : true,
-    "durationMs" : 18,
+    "durationMs" : 21,
     "evidence" : "SQLite fact ranked first",
     "error" : ""
   }, {
     "id" : "M04",
     "category" : "Memory",
     "passed" : true,
-    "durationMs" : 20,
+    "durationMs" : 17,
     "evidence" : "fact deleted by id",
     "error" : ""
   }, {
     "id" : "M05",
     "category" : "Memory",
     "passed" : true,
-    "durationMs" : 4,
-    "evidence" : "511 -> 67 estimated tokens",
+    "durationMs" : 5,
+    "evidence" : "538 -> 87 estimated tokens",
     "error" : ""
   }, {
     "id" : "S01",
     "category" : "CodeSearch",
     "passed" : true,
-    "durationMs" : 392,
+    "durationMs" : 475,
     "evidence" : "4 AST chunks indexed",
     "error" : ""
   }, {
     "id" : "S02",
     "category" : "CodeSearch",
     "passed" : true,
-    "durationMs" : 21,
+    "durationMs" : 26,
     "evidence" : "AccountService#loadAccount(String) ranked first",
     "error" : ""
   }, {
     "id" : "S03",
     "category" : "CodeSearch",
     "passed" : true,
-    "durationMs" : 22,
+    "durationMs" : 21,
     "evidence" : "AccountService CONTAINS method relation stored",
     "error" : ""
   }, {
     "id" : "S04",
     "category" : "CodeSearch",
     "passed" : true,
-    "durationMs" : 26,
+    "durationMs" : 23,
     "evidence" : "search succeeded after SQLite reopen",
     "error" : ""
   }, {
     "id" : "S05",
     "category" : "CodeSearch",
     "passed" : true,
-    "durationMs" : 24,
+    "durationMs" : 21,
     "evidence" : "AccountService symbol returned in top 3",
     "error" : ""
   }, {
@@ -155,7 +155,7 @@
     "id" : "T02",
     "category" : "Tools",
     "passed" : true,
-    "durationMs" : 0,
+    "durationMs" : 1,
     "evidence" : "INVALID_ARGUMENTS: missing path",
     "error" : ""
   }, {

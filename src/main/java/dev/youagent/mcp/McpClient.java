@@ -43,7 +43,7 @@ public final class McpClient implements AutoCloseable {
             params.set("capabilities", mapper.createObjectNode());
             ObjectNode clientInfo = params.putObject("clientInfo");
             clientInfo.put("name", "you-agent-cli");
-            clientInfo.put("version", "0.1.0");
+            clientInfo.put("version", "0.2.0-SNAPSHOT");
             JsonNode response = request("initialize", params, remaining(deadline));
             JsonNode result = result(response);
             negotiatedProtocol = result.path("protocolVersion").asText();
