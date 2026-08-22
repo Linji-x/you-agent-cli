@@ -6,7 +6,7 @@
 
 You Agent CLI 是一个 Java 17 终端代码 Agent：把自然语言任务转换为可审计的模型请求、工具调用、DAG 节点、代码检索证据和确定性退出状态，而不是只包装一个聊天接口。
 
-> 本仓库为独立 clean-room 实现；来源和资产边界见 [NOTICE.md](NOTICE.md)。
+> 本仓库由作者独立设计与实现；来源和资产边界见 [NOTICE.md](NOTICE.md)。
 
 核心能力：
 
@@ -364,4 +364,4 @@ src/main/java/dev/youagent/
 - 详细安全边界见 [SECURITY.md](SECURITY.md)。
 - 本项目使用 MIT License；来源声明见 [NOTICE.md](NOTICE.md)，依赖许可证见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
 
-You Agent CLI 与 PaiCLI 无隶属关系，未复制其非开源 Java 实现、Prompt、测试、付费教程文档或图片。
+本仓库由作者独立设计与实现，未引入未经授权的非开源代码、Prompt、测试、付费教程文档或图片。

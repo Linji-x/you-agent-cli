@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes are documented here. The project follows semantic versioning after the initial clean-room release.
+All notable changes are documented here. The project follows semantic versioning after the initial independent release.
 
 ## [Unreleased]
 
@@ -33,7 +33,7 @@ All notable changes are documented here. The project follows semantic versioning
 
 ## [0.1.0] — 2026-08-22
 
-- Initial independent clean-room Java 17 implementation with ReAct, basic DAG execution, explicit Memory, Java code indexing, MCP protocol primitives, offline Demo, 25 fixed experiments, CI, and MIT licensing.
+- Initial independently designed Java 17 implementation with ReAct, basic DAG execution, explicit Memory, Java code indexing, MCP protocol primitives, offline Demo, 25 fixed experiments, CI, and MIT licensing.
 
 [Unreleased]: https://github.com/Linji-x/you-agent-cli/compare/v0.2.0...HEAD
 [0.2.0]: https://github.com/Linji-x/you-agent-cli/compare/v0.1.0...v0.2.0

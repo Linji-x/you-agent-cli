@@ -26,4 +26,4 @@ Observed before v0.2 changes:
 - Tool Schema validation was shallow, and command output was fully buffered before truncation.
 - No labeled retrieval metrics, online Agent evaluation harness, JaCoCo report, Java 21 CI, roadmap, or changelog existed.
 
-This audit records evidence from the original clean-room `main`; it does not claim that future roadmap items were delivered.
+This audit records evidence from the original independent `main`; it does not claim that future roadmap items were delivered.

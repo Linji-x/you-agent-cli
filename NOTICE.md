@@ -1,21 +1,23 @@
-# Provenance and clean-room boundary
+# Provenance and independent implementation
 
-You Agent CLI is an independent Java 17 implementation written for this
-repository. It does not contain source code, tests, prompts, documentation,
-images, or other assets from the non-open-source Java edition of PaiCLI.
+You Agent CLI was independently designed and implemented for this repository.
+Its names, package structure, interfaces, configuration, fixtures,
+documentation, prompts, tests, and visual assets were created for this project.
 
-The product scope was informed by public descriptions of terminal coding
-agents, the ReAct paper, the Model Context Protocol specification, and public
-descriptions of PaiCLI's feature set. Names, package structure, interfaces,
-configuration, fixtures, documentation, and implementation in this repository
-were created independently.
+The repository does not incorporate source code, prompts, tests,
+documentation, images, paid tutorial materials, company code, company data, or
+internal documents unless they are original to this project or distributed
+under a compatible license with attribution.
+
+The technical design uses public, generally available concepts and
+specifications for terminal coding agents, ReAct-style tool use, JSON Schema,
+OpenAI-compatible function calling, and the Model Context Protocol.
 
 References:
 
 - ReAct: https://arxiv.org/abs/2210.03629
 - Model Context Protocol: https://modelcontextprotocol.io/specification/
-- PaiCLI public product page: https://paicli.paicoding.com/
 
-PaiCLI is a project of its respective author. No affiliation or endorsement is
-claimed. If a future contribution incorporates third-party code, its license
-and attribution must be added before merge.
+Third-party dependencies and their licenses are documented in
+THIRD_PARTY_NOTICES.md. No affiliation or endorsement by unrelated projects or
+vendors is claimed.

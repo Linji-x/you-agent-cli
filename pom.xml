@@ -8,7 +8,7 @@
     <artifactId>you-agent-cli</artifactId>
     <version>0.2.0-SNAPSHOT</version>
     <name>You Agent CLI</name>
-    <description>Clean-room Java 17 terminal coding agent</description>
+    <description>Independently designed Java 17 terminal coding agent</description>
 
     <properties>
         <maven.compiler.release>17</maven.compiler.release>
