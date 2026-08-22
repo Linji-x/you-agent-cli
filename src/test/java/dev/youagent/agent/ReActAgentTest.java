@@ -74,6 +74,26 @@ class ReActAgentTest {
         assertEquals(3, result.rounds());
     }
 
+    @Test
+    void successfulCallResetsConsecutiveFailureCounter(@TempDir Path workspace) {
+        ToolCall missing = new ToolCall("bad", "missing_tool", mapper.createObjectNode());
+        ToolCall success = new ToolCall("ok", "list_directory", mapper.createObjectNode().put("path", "."));
+        LlmResponse failed = new LlmResponse("", List.of(missing), LlmResponse.FinishReason.TOOL_CALLS);
+        ReActAgent agent = new ReActAgent(new QueueClient(
+                failed,
+                failed,
+                new LlmResponse("", List.of(success), LlmResponse.FinishReason.TOOL_CALLS),
+                failed,
+                failed,
+                new LlmResponse("Recovered without a false fuse", List.of(), LlmResponse.FinishReason.STOP)
+        ), ToolRegistry.standard(workspace, Duration.ofSeconds(2)), 6, "test");
+
+        AgentResult result = agent.run("recover between failures");
+
+        assertEquals(AgentResult.ExitReason.COMPLETED, result.exitReason());
+        assertEquals(6, result.rounds());
+    }
+
     private static final class QueueClient implements LlmClient {
         private final Queue<LlmResponse> responses;
 
