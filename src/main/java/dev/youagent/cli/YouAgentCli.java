@@ -149,7 +149,7 @@ public final class YouAgentCli {
              McpManager mcp = new McpManager(workspace, tools)) {
             mcp.start();
             result = new PlanExecuteAgent(new OpenAiCompatibleClient(config), tools,
-                    config.maxRounds()).run(task);
+                    config.maxRounds(), config.planMaxParallelism()).run(task);
         }
         System.out.println("PLAN");
         result.tasks().forEach(planTask -> System.out.println("  " + planTask.id() + " <- "
