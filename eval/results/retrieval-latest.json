@@ -1,0 +1,135 @@
+{
+  "generatedAt" : "2026-08-22T15:47:05.904546300Z",
+  "gitCommit" : "3a4d6b29d487e150588754f40f395b1713215e25",
+  "javaVersion" : "17.0.16",
+  "operatingSystem" : "Windows 11 amd64",
+  "configurations" : [ {
+    "name" : "keyword-only",
+    "embeddingId" : "feature-hash:256",
+    "queries" : 8,
+    "recallAt5" : 1.0,
+    "mrrAt10" : 1.0,
+    "averageLatencyMs" : 1.60815,
+    "results" : [ {
+      "id" : "Q01",
+      "query" : "authenticate a bearer token",
+      "targetSymbol" : "AuthService#authenticateToken(String)",
+      "rank" : 1,
+      "latencyMs" : 6.2869,
+      "topSymbols" : [ "AuthService#authenticateToken(String)", "AuthService", "src/main/java/evalfixture/AuthService.java", "OrderValidator#validateTotal(BigDecimal)", "UserRepository#findByEmail(String)", "OrderValidator", "src/main/java/evalfixture/EventPublisher.java", "src/main/java/evalfixture/OrderValidator.java", "src/main/java/evalfixture/RetryPolicy.java", "src/main/java/evalfixture/UserRepository.java" ]
+    }, {
+      "id" : "Q02",
+      "query" : "reject an expired user token",
+      "targetSymbol" : "AuthService#authenticateToken(String)",
+      "rank" : 1,
+      "latencyMs" : 1.3075,
+      "topSymbols" : [ "AuthService#authenticateToken(String)", "UserRepository#findByEmail(String)", "AuthService", "UserRepository", "src/main/java/evalfixture/AuthService.java", "src/main/java/evalfixture/UserRepository.java", "RetryPolicy#shouldRetry(int, int)", "RetryPolicy", "src/main/java/evalfixture/RetryPolicy.java", "EventPublisher#publish(OrderEvent)" ]
+    }, {
+      "id" : "Q03",
+      "query" : "validate that an order total is positive",
+      "targetSymbol" : "OrderValidator#validateTotal(BigDecimal)",
+      "rank" : 1,
+      "latencyMs" : 1.03,
+      "topSymbols" : [ "OrderValidator#validateTotal(BigDecimal)", "OrderValidator", "src/main/java/evalfixture/OrderValidator.java", "EventPublisher#publish(OrderEvent)", "EventPublisher", "src/main/java/evalfixture/EventPublisher.java", "AuthService#authenticateToken(String)", "AuthService", "src/main/java/evalfixture/AuthService.java", "RetryPolicy#shouldRetry(int, int)" ]
+    }, {
+      "id" : "Q04",
+      "query" : "decide whether another retry attempt is allowed",
+      "targetSymbol" : "RetryPolicy#shouldRetry(int, int)",
+      "rank" : 1,
+      "latencyMs" : 1.0101,
+      "topSymbols" : [ "RetryPolicy#shouldRetry(int, int)", "RetryPolicy", "src/main/java/evalfixture/RetryPolicy.java", "EventPublisher#publish(OrderEvent)", "EventPublisher", "src/main/java/evalfixture/EventPublisher.java", "AuthService#authenticateToken(String)", "AuthService", "src/main/java/evalfixture/AuthService.java", "OrderValidator#validateTotal(BigDecimal)" ]
+    }, {
+      "id" : "Q05",
+      "query" : "load a user account by email address",
+      "targetSymbol" : "UserRepository#findByEmail(String)",
+      "rank" : 1,
+      "latencyMs" : 1.0064,
+      "topSymbols" : [ "UserRepository#findByEmail(String)", "UserRepository", "src/main/java/evalfixture/UserRepository.java", "AuthService#authenticateToken(String)", "OrderValidator#validateTotal(BigDecimal)", "AuthService", "OrderValidator", "src/main/java/evalfixture/AuthService.java", "src/main/java/evalfixture/EventPublisher.java", "src/main/java/evalfixture/OrderValidator.java" ]
+    }, {
+      "id" : "Q06",
+      "query" : "publish an order domain event",
+      "targetSymbol" : "EventPublisher#publish(OrderEvent)",
+      "rank" : 1,
+      "latencyMs" : 0.8474,
+      "topSymbols" : [ "EventPublisher#publish(OrderEvent)", "EventPublisher", "src/main/java/evalfixture/EventPublisher.java", "OrderValidator#validateTotal(BigDecimal)", "OrderValidator", "src/main/java/evalfixture/OrderValidator.java", "AuthService#authenticateToken(String)", "RetryPolicy#shouldRetry(int, int)", "AuthService", "RetryPolicy" ]
+    }, {
+      "id" : "Q07",
+      "query" : "maximum attempts backoff policy",
+      "targetSymbol" : "RetryPolicy#shouldRetry(int, int)",
+      "rank" : 1,
+      "latencyMs" : 0.7429,
+      "topSymbols" : [ "RetryPolicy#shouldRetry(int, int)", "RetryPolicy", "src/main/java/evalfixture/RetryPolicy.java", "AuthService#authenticateToken(String)", "EventPublisher#publish(OrderEvent)", "OrderValidator#validateTotal(BigDecimal)", "UserRepository#findByEmail(String)", "AuthService", "EventPublisher", "OrderValidator" ]
+    }, {
+      "id" : "Q08",
+      "query" : "repository email lookup returning optional",
+      "targetSymbol" : "UserRepository#findByEmail(String)",
+      "rank" : 1,
+      "latencyMs" : 0.634,
+      "topSymbols" : [ "UserRepository#findByEmail(String)", "UserRepository", "src/main/java/evalfixture/UserRepository.java", "AuthService#authenticateToken(String)", "EventPublisher#publish(OrderEvent)", "OrderValidator#validateTotal(BigDecimal)", "RetryPolicy#shouldRetry(int, int)", "AuthService", "EventPublisher", "OrderValidator" ]
+    } ]
+  }, {
+    "name" : "feature-hash-hybrid",
+    "embeddingId" : "feature-hash:256",
+    "queries" : 8,
+    "recallAt5" : 1.0,
+    "mrrAt10" : 1.0,
+    "averageLatencyMs" : 0.85195,
+    "results" : [ {
+      "id" : "Q01",
+      "query" : "authenticate a bearer token",
+      "targetSymbol" : "AuthService#authenticateToken(String)",
+      "rank" : 1,
+      "latencyMs" : 1.452,
+      "topSymbols" : [ "AuthService#authenticateToken(String)", "AuthService", "src/main/java/evalfixture/AuthService.java", "OrderValidator#validateTotal(BigDecimal)", "UserRepository#findByEmail(String)", "src/main/java/evalfixture/UserRepository.java", "UserRepository", "OrderValidator", "src/main/java/evalfixture/EventPublisher.java", "src/main/java/evalfixture/OrderValidator.java" ]
+    }, {
+      "id" : "Q02",
+      "query" : "reject an expired user token",
+      "targetSymbol" : "AuthService#authenticateToken(String)",
+      "rank" : 1,
+      "latencyMs" : 0.9258,
+      "topSymbols" : [ "AuthService#authenticateToken(String)", "UserRepository#findByEmail(String)", "AuthService", "UserRepository", "src/main/java/evalfixture/AuthService.java", "RetryPolicy#shouldRetry(int, int)", "src/main/java/evalfixture/UserRepository.java", "RetryPolicy", "src/main/java/evalfixture/RetryPolicy.java", "EventPublisher#publish(OrderEvent)" ]
+    }, {
+      "id" : "Q03",
+      "query" : "validate that an order total is positive",
+      "targetSymbol" : "OrderValidator#validateTotal(BigDecimal)",
+      "rank" : 1,
+      "latencyMs" : 0.7166,
+      "topSymbols" : [ "OrderValidator#validateTotal(BigDecimal)", "OrderValidator", "src/main/java/evalfixture/OrderValidator.java", "EventPublisher#publish(OrderEvent)", "EventPublisher", "src/main/java/evalfixture/EventPublisher.java", "AuthService#authenticateToken(String)", "AuthService", "RetryPolicy#shouldRetry(int, int)", "src/main/java/evalfixture/AuthService.java" ]
+    }, {
+      "id" : "Q04",
+      "query" : "decide whether another retry attempt is allowed",
+      "targetSymbol" : "RetryPolicy#shouldRetry(int, int)",
+      "rank" : 1,
+      "latencyMs" : 0.6319,
+      "topSymbols" : [ "RetryPolicy#shouldRetry(int, int)", "RetryPolicy", "src/main/java/evalfixture/RetryPolicy.java", "EventPublisher#publish(OrderEvent)", "EventPublisher", "src/main/java/evalfixture/EventPublisher.java", "AuthService#authenticateToken(String)", "AuthService", "OrderValidator#validateTotal(BigDecimal)", "UserRepository#findByEmail(String)" ]
+    }, {
+      "id" : "Q05",
+      "query" : "load a user account by email address",
+      "targetSymbol" : "UserRepository#findByEmail(String)",
+      "rank" : 1,
+      "latencyMs" : 0.9171,
+      "topSymbols" : [ "UserRepository#findByEmail(String)", "UserRepository", "src/main/java/evalfixture/UserRepository.java", "AuthService#authenticateToken(String)", "OrderValidator#validateTotal(BigDecimal)", "AuthService", "OrderValidator", "src/main/java/evalfixture/AuthService.java", "EventPublisher#publish(OrderEvent)", "src/main/java/evalfixture/EventPublisher.java" ]
+    }, {
+      "id" : "Q06",
+      "query" : "publish an order domain event",
+      "targetSymbol" : "EventPublisher#publish(OrderEvent)",
+      "rank" : 1,
+      "latencyMs" : 0.6563,
+      "topSymbols" : [ "EventPublisher#publish(OrderEvent)", "EventPublisher", "src/main/java/evalfixture/EventPublisher.java", "OrderValidator#validateTotal(BigDecimal)", "OrderValidator", "AuthService#authenticateToken(String)", "src/main/java/evalfixture/OrderValidator.java", "RetryPolicy#shouldRetry(int, int)", "AuthService", "RetryPolicy" ]
+    }, {
+      "id" : "Q07",
+      "query" : "maximum attempts backoff policy",
+      "targetSymbol" : "RetryPolicy#shouldRetry(int, int)",
+      "rank" : 1,
+      "latencyMs" : 0.614,
+      "topSymbols" : [ "RetryPolicy#shouldRetry(int, int)", "RetryPolicy", "src/main/java/evalfixture/RetryPolicy.java", "AuthService#authenticateToken(String)", "EventPublisher#publish(OrderEvent)", "OrderValidator#validateTotal(BigDecimal)", "UserRepository#findByEmail(String)", "AuthService", "EventPublisher", "OrderValidator" ]
+    }, {
+      "id" : "Q08",
+      "query" : "repository email lookup returning optional",
+      "targetSymbol" : "UserRepository#findByEmail(String)",
+      "rank" : 1,
+      "latencyMs" : 0.9019,
+      "topSymbols" : [ "UserRepository#findByEmail(String)", "UserRepository", "src/main/java/evalfixture/UserRepository.java", "AuthService#authenticateToken(String)", "EventPublisher#publish(OrderEvent)", "OrderValidator#validateTotal(BigDecimal)", "RetryPolicy#shouldRetry(int, int)", "AuthService", "EventPublisher", "OrderValidator" ]
+    } ]
+  } ]
+}
