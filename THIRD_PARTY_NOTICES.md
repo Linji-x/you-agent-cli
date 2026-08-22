@@ -8,7 +8,7 @@ authoritative.
 
 | Component | Version | License |
 |---|---:|---|
-| Jackson core, annotations, databind, jsr310 | 2.17.2 | Apache License 2.0 |
+| Jackson core, annotations, databind, jsr310 | 2.18.9 | Apache License 2.0 |
 | OkHttp | 4.12.0 | Apache License 2.0 |
 | Okio | Maven-resolved transitive version | Apache License 2.0 |
 | Kotlin standard library (OkHttp transitive dependency) | Maven-resolved transitive version | Apache License 2.0 |

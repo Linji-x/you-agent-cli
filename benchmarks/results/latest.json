@@ -1,5 +1,5 @@
 {
-  "generatedAt" : "2026-08-22T12:21:12.896168200Z",
+  "generatedAt" : "2026-08-22T12:22:15.585147200Z",
   "javaVersion" : "17.0.16",
   "os" : "Windows 11 amd64",
   "total" : 25,
@@ -8,7 +8,7 @@
     "id" : "R01",
     "category" : "ReAct",
     "passed" : true,
-    "durationMs" : 93,
+    "durationMs" : 88,
     "evidence" : "COMPLETED in 2 rounds; tool result present",
     "error" : ""
   }, {
@@ -22,7 +22,7 @@
     "id" : "R03",
     "category" : "ReAct",
     "passed" : true,
-    "durationMs" : 7,
+    "durationMs" : 6,
     "evidence" : "REPEATED_FAILURE after 3 identical failures",
     "error" : ""
   }, {
@@ -64,84 +64,84 @@
     "id" : "D04",
     "category" : "DAG",
     "passed" : true,
-    "durationMs" : 0,
+    "durationMs" : 1,
     "evidence" : "supplemental fix task SUCCEEDED",
     "error" : ""
   }, {
     "id" : "D05",
     "category" : "DAG",
     "passed" : true,
-    "durationMs" : 1,
+    "durationMs" : 0,
     "evidence" : "left and right SUCCEEDED",
     "error" : ""
   }, {
     "id" : "M01",
     "category" : "Memory",
     "passed" : true,
-    "durationMs" : 25,
+    "durationMs" : 30,
     "evidence" : "1 fact visible after reopen",
     "error" : ""
   }, {
     "id" : "M02",
     "category" : "Memory",
     "passed" : true,
-    "durationMs" : 15,
+    "durationMs" : 18,
     "evidence" : "alpha sees global+alpha only",
     "error" : ""
   }, {
     "id" : "M03",
     "category" : "Memory",
     "passed" : true,
-    "durationMs" : 23,
+    "durationMs" : 18,
     "evidence" : "SQLite fact ranked first",
     "error" : ""
   }, {
     "id" : "M04",
     "category" : "Memory",
     "passed" : true,
-    "durationMs" : 16,
+    "durationMs" : 20,
     "evidence" : "fact deleted by id",
     "error" : ""
   }, {
     "id" : "M05",
     "category" : "Memory",
     "passed" : true,
-    "durationMs" : 3,
+    "durationMs" : 4,
     "evidence" : "511 -> 67 estimated tokens",
     "error" : ""
   }, {
     "id" : "S01",
     "category" : "CodeSearch",
     "passed" : true,
-    "durationMs" : 366,
+    "durationMs" : 392,
     "evidence" : "4 AST chunks indexed",
     "error" : ""
   }, {
     "id" : "S02",
     "category" : "CodeSearch",
     "passed" : true,
-    "durationMs" : 20,
+    "durationMs" : 21,
     "evidence" : "AccountService#loadAccount(String) ranked first",
     "error" : ""
   }, {
     "id" : "S03",
     "category" : "CodeSearch",
     "passed" : true,
-    "durationMs" : 23,
+    "durationMs" : 22,
     "evidence" : "AccountService CONTAINS method relation stored",
     "error" : ""
   }, {
     "id" : "S04",
     "category" : "CodeSearch",
     "passed" : true,
-    "durationMs" : 25,
+    "durationMs" : 26,
     "evidence" : "search succeeded after SQLite reopen",
     "error" : ""
   }, {
     "id" : "S05",
     "category" : "CodeSearch",
     "passed" : true,
-    "durationMs" : 22,
+    "durationMs" : 24,
     "evidence" : "AccountService symbol returned in top 3",
     "error" : ""
   }, {
