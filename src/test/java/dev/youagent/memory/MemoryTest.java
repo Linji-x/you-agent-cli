@@ -1,6 +1,8 @@
 package dev.youagent.memory;
 
 import dev.youagent.llm.ChatMessage;
+import dev.youagent.llm.ToolCall;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -49,5 +51,36 @@ class MemoryTest {
                 && message.content().contains("original goal")));
         assertTrue(result.messages().stream().anyMatch(message -> "recent task".equals(message.content())));
         assertFalse(result.messages().stream().anyMatch(message -> large.equals(message.content())));
+    }
+
+    @Test
+    void estimatesAndSummarizesToolCallsArgumentsResultsAndFailures() throws Exception {
+        ToolCall write = new ToolCall("c1", "write_file", new ObjectMapper().readTree("""
+                {"path":"src/main/java/App.java","content":"changed implementation"}
+                """));
+        List<ChatMessage> messages = List.of(
+                ChatMessage.assistant("", List.of(write)),
+                ChatMessage.tool("c1", "wrote src/main/java/App.java"),
+                ChatMessage.tool("c2", "ERROR[NON_ZERO_EXIT]: tests failed")
+        );
+
+        String summary = ContextCompactor.deterministicSummary(messages);
+
+        assertTrue(ContextCompactor.estimateTokens(messages) > 30);
+        assertTrue(summary.contains("tool-call write_file"));
+        assertTrue(summary.contains("src/main/java/App.java"));
+        assertTrue(summary.contains("tests failed"));
+    }
+
+    @Test
+    void retrievesChineseMemoryWithExplainableCharacterNgrams(@TempDir Path directory) throws Exception {
+        LongTermMemory memory = new LongTermMemory(directory.resolve("memory.jsonl"));
+        memory.save("project", "数据库索引使用 SQLite 持久化，并保存在项目目录中");
+        memory.save("project", "前端页面统一使用蓝色主题");
+
+        List<MemoryFact> results = memory.search("project", "代码索引存在哪个数据库", 2);
+
+        assertFalse(results.isEmpty());
+        assertTrue(results.get(0).content().contains("SQLite"));
     }
 }

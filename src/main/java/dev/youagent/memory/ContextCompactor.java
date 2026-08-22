@@ -54,25 +54,39 @@ public final class ContextCompactor {
     }
 
     public static int estimateTokens(List<ChatMessage> messages) {
-        int chars = messages.stream()
-                .mapToInt(message -> message.content() == null ? 0 : message.content().length())
-                .sum();
+        int chars = 0;
+        for (ChatMessage message : messages) {
+            chars += message.role() == null ? 0 : message.role().length();
+            chars += message.content() == null ? 0 : message.content().length();
+            chars += message.toolCallId() == null ? 0 : message.toolCallId().length();
+            for (var call : message.toolCalls()) {
+                chars += call.id().length() + call.name().length() + call.arguments().toString().length();
+            }
+            chars += 12;
+        }
         return Math.max(1, (chars + 3) / 4);
     }
 
     public static String deterministicSummary(List<ChatMessage> messages) {
         StringBuilder summary = new StringBuilder();
         for (ChatMessage message : messages) {
-            if (message.content() == null || message.content().isBlank()) {
-                continue;
+            if (message.content() != null && !message.content().isBlank()) {
+                String normalized = concise(message.content(), 320);
+                String label = message.role().equals("tool")
+                        ? "tool-result[" + message.toolCallId() + "]" : message.role();
+                summary.append("- ").append(label).append(": ").append(normalized).append('\n');
             }
-            String normalized = message.content().replaceAll("\\s+", " ").strip();
-            if (normalized.length() > 240) {
-                normalized = normalized.substring(0, 240) + "…";
+            for (var call : message.toolCalls()) {
+                summary.append("- tool-call ").append(call.name()).append(' ')
+                        .append(concise(call.arguments().toString(), 320)).append('\n');
             }
-            summary.append("- ").append(message.role()).append(": ").append(normalized).append('\n');
         }
         return summary.toString().stripTrailing();
+    }
+
+    private static String concise(String value, int limit) {
+        String normalized = value.replaceAll("\\s+", " ").strip();
+        return normalized.length() <= limit ? normalized : normalized.substring(0, limit) + "…";
     }
 
     private List<ChatMessage> trimToolOutputs(List<ChatMessage> messages) {

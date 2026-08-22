@@ -4,187 +4,36 @@
 [![CI](https://github.com/Linji-x/you-agent-cli/actions/workflows/ci.yml/badge.svg)](https://github.com/Linji-x/you-agent-cli/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
-一个基于 Java 17 的终端代码开发 Agent：通过自然语言完成代码检索、文件操作、命令执行、DAG 任务规划、上下文管理和 MCP 外部工具调用。
+You Agent CLI 是一个 Java 17 终端代码 Agent：把自然语言任务转换为可审计的模型请求、工具调用、DAG 节点、代码检索证据和确定性退出状态，而不是只包装一个聊天接口。
 
-> 本仓库是独立 clean-room 实现。它不包含非开源 Java PaiCLI 的源码、测试、Prompt、文档或图片。项目范围受到终端 Agent、ReAct、MCP 以及 PaiCLI 公开产品描述的启发，具体边界见 [NOTICE.md](NOTICE.md)。
+> 本仓库由作者独立设计与实现；来源和资产边界见 [NOTICE.md](NOTICE.md)。
 
-**项目经历写法**：`You Agent CLI｜个人 clean-room 设计与实现｜2026.04–至今`。该日期覆盖个人学习与原型阶段；公开仓库版本于 2026.08 重写，用于排除受限教程材料并形成可审计的原创实现。
+核心能力：
 
-## 为什么值得看
+- ReAct + OpenAI-compatible Function Calling，支持 SSE 工具参数增量合并、递归 Schema 校验和 Observation 回灌。
+- Plan-and-Execute DAG，支持依赖输出传递、失败传播、默认串行和显式受控并行。
+- JavaParser + SQLite 代码索引，并以 `search_code` 等四个工具真实接入 Agent 主链路。
+- 显式长期 Memory、上下文压缩、MCP stdio/Streamable HTTP 动态工具注册。
+- JUnit、25 项 deterministic offline conformance benchmark、人工标注检索评测和真实模型在线评测入口。
 
-- 不是聊天壳：核心路径真实执行 `LLM → Function Calling → Schema 校验 → Tool → Observation → 下一轮 LLM`。
-- 不是只写 happy path：最大轮次、重复失败熔断、DAG 失败传播、路径围栏、命令超时、MCP 启动失败都有确定性退出。
-- 不是只给截图：核心能力有自动化测试，另有 25 个固定离线实验任务及机器生成的真实结果。
-- 不依赖付费模型即可验收：`--demo`、单元测试和 25 项 benchmark 均可离线执行；真实 LLM 调用使用用户自己的 OpenAI-compatible API。
+## 30 秒启动
 
-## 架构
-
-```mermaid
-flowchart TB
-    U[Terminal / --once / --plan] --> CLI[YouAgentCli]
-
-    subgraph Kernel[Execution kernel]
-        REACT[ReActAgent<br/>reason → act → observe]
-        PLAN[PlanExecuteAgent]
-        DAG[ExecutionPlan + DagExecutor<br/>validated DAG states]
-        PLAN --> DAG
-        DAG --> REACT
-    end
-
-    CLI --> REACT
-    CLI --> PLAN
-
-    subgraph Context[Context and memory]
-        COMPACT[ContextCompactor<br/>tool trimming + summary]
-        LTM[LongTermMemory<br/>explicit JSONL facts]
-    end
-    REACT <--> COMPACT
-    CLI <--> LTM
-
-    subgraph Tools[Tool layer]
-        REG[ToolRegistry<br/>schema validation]
-        POLICY[WorkspaceGuard<br/>command timeout]
-        BUILTIN[read / write / list / glob / grep / command]
-        MCP[McpClient<br/>stdio + Streamable HTTP]
-        REG --> POLICY --> BUILTIN
-        REG --> MCP
-    end
-    REACT <--> REG
-
-    subgraph Retrieval[Code intelligence]
-        AST[JavaParser AST chunking]
-        EMB[Local hash embedding]
-        DB[(SQLite chunks + relations)]
-        SEARCH[Hybrid ranker]
-        AST --> DB
-        EMB --> DB
-        DB --> SEARCH
-    end
-    CLI --> SEARCH
-
-    subgraph Provider[Model boundary]
-        STREAM[OpenAI-compatible SSE client]
-        MERGE[Incremental tool-call merge]
-        STREAM --> MERGE
-    end
-    REACT <--> STREAM
-```
-
-架构刻意把“模型决策”和“确定性执行”分开：LLM 可以提出工具调用或任务图，但参数校验、路径限制、状态转换、失败传播和循环终止都由 Java 代码控制。
-
-## 核心流程
-
-### ReAct + Function Calling
-
-```mermaid
-sequenceDiagram
-    actor User
-    participant Agent as ReActAgent
-    participant Context as ContextCompactor
-    participant LLM as LlmClient
-    participant Registry as ToolRegistry
-    participant Tool
-
-    User->>Agent: natural-language task
-    loop round <= maxRounds
-        Agent->>Context: check budget and compact if needed
-        Agent->>LLM: messages + tool schemas
-        LLM-->>Agent: content and/or streamed tool_calls
-        alt final content without tool calls
-            Agent-->>User: final answer
-        else tool calls
-            Agent->>Registry: validate name + JSON arguments
-            Registry->>Tool: execute inside workspace policy
-            Tool-->>Registry: success or structured error
-            Registry-->>Agent: observation tied to tool_call_id
-            Agent->>Agent: repeated-failure and round guards
-        end
-    end
-```
-
-流式响应中的 `id`、函数名和 JSON 参数可以分散在多个 SSE delta 中；`StreamingToolCallAccumulator` 按 `index` 增量合并，并在工具执行前解析完整 JSON。无效 JSON 不会进入工具层。
-
-### Plan-and-Execute DAG
-
-`--plan` 先要求模型只返回 JSON 任务图，然后由 Java 验证引用和环，再按拓扑关系逐节点调用 ReAct worker。
-
-```mermaid
-stateDiagram-v2
-    [*] --> WAITING
-    WAITING --> RUNNING: all dependencies SUCCEEDED
-    RUNNING --> SUCCEEDED: worker completed
-    RUNNING --> FAILED: worker/tool/error/limit
-    WAITING --> BLOCKED: any dependency FAILED or BLOCKED
-    SUCCEEDED --> [*]
-    FAILED --> [*]
-    BLOCKED --> [*]
-```
-
-- 未知依赖、自依赖和环在执行前拒绝。
-- 父节点失败后，所有传递依赖节点变为 `BLOCKED`；独立分支仍可继续。
-- `ExecutionPlan.append(...)` 支持补充规划，但追加后的整张图仍必须通过 DAG 校验。
-
-## 技术选型与理由
-
-| 选择 | 用途 | 为什么这样选 | 取舍 |
-|---|---|---|---|
-| Java 17 | 核心实现 | LTS、类型系统和并发/IO 基础稳定，适合展示底层协议与状态机 | 终端 UI 目前保持轻量，没有引入重量级框架 |
-| Jackson | JSON、Function Calling、MCP | 显式控制消息和 Schema，便于审计流式增量合并 | 需要自己维护协议 DTO |
-| OkHttp | LLM SSE、Streamable HTTP MCP | 同时覆盖普通 HTTP 和流式响应，超时控制清晰 | 未封装成特定厂商 SDK |
-| JavaParser | Java AST 切块 | 能按类/方法建立稳定的语义边界和行号 | 非 Java 文件退化为实时 glob/grep |
-| SQLite JDBC | 代码块、向量、关系持久化 | 单文件、无需服务、便于面试官直接复现 | 当前向量相似度在 Java 侧计算，适合中小仓库 |
-| 本地 hash embedding | 默认离线语义信号 | 零密钥、可重复、benchmark 不受外部模型波动影响 | 语义质量低于专业 embedding API；接口可替换 |
-| Maven Shade | 单 Jar 交付 | 一条命令构建和运行，面试机无需手工拼 classpath | 首次运行需要下载 Maven 与公开依赖 |
-| JUnit 5 | 核心行为验证 | 参数清晰、临时目录隔离、无需真实 API Key | 在线模型质量另行评测，不混入单元测试结论 |
-
-没有采用 LangChain/Spring AI：这个仓库的目标是展示 ReAct 循环、工具协议、DAG 状态转换、上下文压缩和 MCP 生命周期如何落到代码，而不是隐藏在框架回调中。
-
-## 一条命令启动
-
-要求：Java 17 或更高版本。仓库内脚本会在 `.tools/` 自举隔离的 Maven 3.9.11，不修改系统 Maven。
+要求 Java 17+。首次执行会下载 Maven 3.9.11 并校验 Apache 官方 SHA-512，后续使用本地缓存。
 
 ```powershell
-# Windows：离线演示，不需要 API Key
+# Windows：真实离线 Demo，不需要 API Key
 .\run.ps1 --demo
+
+# 编译、JUnit、JaCoCo、打包、Demo、25 项离线一致性评测
+.\run.ps1 --verify
 ```
 
 ```bash
-# macOS / Linux
 ./run.sh --demo
+./run.sh --verify
 ```
 
-首次执行需要联网下载 Maven 和公开依赖；之后可使用本地缓存。
-
-### 配置真实模型
-
-```powershell
-Copy-Item .env.example .env
-# 编辑 .env，只填自己的 Key、endpoint 和 model
-.\run.ps1
-```
-
-```dotenv
-YOU_AGENT_API_KEY=replace_with_your_own_key
-YOU_AGENT_BASE_URL=https://api.example.com/v1
-YOU_AGENT_MODEL=replace_with_model_name
-```
-
-`.env` 已被 `.gitignore` 排除。程序不会打印 API Key；HTTP 异常只报告状态码。
-
-常用命令：
-
-```text
-.\run.ps1 --once "查找订单校验逻辑并说明证据"
-.\run.ps1 --plan "先定位问题，再修改并运行测试"
-.\run.ps1 --index
-.\run.ps1 --search "token validation"
-.\run.ps1 --save "本项目统一使用 Java 17"
-.\run.ps1 --memory
-```
-
-## 完整演示：输入 → 规划 → 工具 → 结果
-
-以下内容来自本仓库 `2026-08-22` 在 Java 17 上实际执行的 `\.\run.ps1 --demo`，不是手写伪日志：
+Demo 会在临时目录真实执行 `ExecutionPlan → DagExecutor → ToolRegistry → write_file/read_file`：
 
 ```text
 INPUT  Create a Java greeting file, then verify its content.
@@ -199,149 +48,320 @@ TOOLS
 RESULT SUCCESS; verified demo-output/Hello.java
 ```
 
-演示使用临时工作区并在结束后清理；执行的确是生产代码里的 `ExecutionPlan`、`DagExecutor`、`ToolRegistry`、`write_file` 和 `read_file`。
+### 配置真实模型
 
-## 失败处理与循环终止
-
-| 场景 | 确定性行为 | 最终状态/错误 |
-|---|---|---|
-| 模型直接返回文本且无工具 | 自动完成 | `COMPLETED` |
-| 达到 `YOU_AGENT_MAX_ROUNDS` | 不再请求模型 | `MAX_ROUNDS` |
-| 完全相同的工具调用连续失败 3 次 | 熔断，避免死循环和费用浪费 | `REPEATED_FAILURE` |
-| 模型返回空内容且无工具 | 立即停止 | `EMPTY_RESPONSE` |
-| provider 返回 length finish reason | 保留已有内容并退出 | `LENGTH_LIMIT` |
-| HTTP/解析/客户端异常 | Key 不写入错误文本 | `CLIENT_ERROR` |
-| 外部取消信号 | 下一轮前检查 | `CANCELLED` |
-| 工具名不存在 | 结构化 observation 回灌 | `ERROR[UNKNOWN_TOOL]` |
-| 参数缺失、类型错误或多余字段 | 工具不执行 | `ERROR[INVALID_ARGUMENTS]` |
-| 路径逃逸或符号链接逃逸 | 策略层拒绝 | `ERROR[POLICY_DENIED]` |
-| 命令超时/非零退出 | 终止进程并回灌证据 | `TIMEOUT` / `NON_ZERO_EXIT` |
-| DAG 节点失败 | 依赖节点递归阻塞，独立分支继续 | `FAILED` / `BLOCKED` |
-
-`execute_command` 接收参数数组并直接使用 `ProcessBuilder`，不经过 shell 字符串拼接；工作目录固定为当前 workspace。
-
-## 上下文压缩与 Memory
-
-这里把两类状态分开：
-
-1. **当前会话消息**：system/user/assistant/tool 序列，只在本次运行中参与 ReAct。
-2. **跨会话事实**：只有用户显式执行 `--save` 或 `/save` 才写入 JSONL；按 project scope 隔离，`global` scope 可跨项目读取。
-
-上下文估算达到预算的默认 80% 时：
-
-1. 先把过长工具输出裁到 8,000 字符并标记；
-2. 保留最近 2 个 user turn 的完整消息；
-3. 让 LLM 摘要更早的目标、证据、改动、决策、失败路径和未完成事项；
-4. 摘要调用失败时使用确定性降级摘要，主任务不会因此中断；
-5. 新历史为 `system + summary + recent turns`，并记录压缩前后估算 token。
-
-长期记忆检索使用当前任务关键词，只注入最相关的 5 条显式事实；临时任务不会被自动“学习”为永久偏好。
-
-## 代码检索
-
-`--index` 对 Java 文件建立三层块：`FILE / CLASS / METHOD`，并持久化：
-
-- 文件、符号、行号和源码块；
-- 本地 embedding 向量；
-- `CONTAINS / EXTENDS / IMPLEMENTS / CALLS / IMPORTS` 关系。
-
-默认混合排序为：
-
-```text
-score = 0.52 * cosine(embedding)
-      + 0.40 * lexical coverage
-      + type boost (METHOD 0.08 / CLASS 0.04)
+```powershell
+Copy-Item .env.example .env
+# 只填写自己的 endpoint、model 和 Key
+.\run.ps1 --once "定位订单校验逻辑并给出代码证据"
 ```
 
-这套默认实现是可离线重复的基线，不夸大为生产级语义模型；`EmbeddingModel` 接口可替换成远程 embedding 服务。
+```dotenv
+YOU_AGENT_API_KEY=replace_with_your_own_key
+YOU_AGENT_BASE_URL=https://api.example.com/v1
+YOU_AGENT_MODEL=replace_with_model_name
+```
 
-## MCP 生命周期
+`.env` 已被 Git 忽略；程序不会打印 Key，HTTP 错误仅报告状态码。
+
+## 架构
+
+```mermaid
+flowchart TB
+    U[Terminal / --once / --plan / --eval] --> CLI[YouAgentCli]
+
+    subgraph Kernel[Execution kernel]
+        REACT[ReActAgent<br/>reason → act → observe]
+        PLAN[PlanExecuteAgent]
+        DAG[ExecutionPlan + DagExecutor<br/>dependency context + bounded parallelism]
+        PLAN --> DAG --> REACT
+    end
+    CLI --> REACT
+    CLI --> PLAN
+
+    subgraph Tooling[Audited tool boundary]
+        REG[ToolRegistry<br/>recursive JSON Schema validation]
+        BUILTIN[files / glob / grep / bounded command]
+        CODE[search_code / index_codebase<br/>find_symbol / find_relations]
+        MCP[McpManager<br/>configured dynamic tools]
+        REG --> BUILTIN
+        REG --> CODE
+        REG --> MCP
+    end
+    REACT <--> REG
+
+    subgraph Retrieval[Code intelligence]
+        AST[JavaParser FILE / CLASS / METHOD chunks]
+        DB[(SQLite chunks, vectors, relations)]
+        RANK[lexical + Feature Hash or remote embedding]
+        AST --> DB --> RANK
+    end
+    CODE --> Retrieval
+
+    subgraph Context[Context state]
+        COMPACT[ContextCompactor]
+        MEMORY[Explicit JSONL LongTermMemory]
+    end
+    REACT <--> COMPACT
+    CLI <--> MEMORY
+
+    subgraph Provider[Model boundary]
+        SSE[OpenAI-compatible SSE]
+        MERGE[StreamingToolCallAccumulator]
+        SSE --> MERGE
+    end
+    REACT <--> SSE
+```
+
+架构把模型建议与确定性执行分开：LLM 可以提出工具调用或任务图，但参数校验、路径约束、并发资格、状态转换、失败传播、输出上限和循环终止由 Java 代码决定。
+
+## 核心执行流程
+
+### ReAct + Function Calling
+
+```mermaid
+sequenceDiagram
+    actor User
+    participant Agent as ReActAgent
+    participant Context as ContextCompactor
+    participant LLM as LlmClient
+    participant Registry as ToolRegistry
+    participant Tool
+
+    User->>Agent: natural-language task
+    loop round <= maxRounds
+        Agent->>Context: estimate + compact if needed
+        Agent->>LLM: messages + registered tool schemas
+        LLM-->>Agent: content / streamed tool_calls
+        alt final content without tool calls
+            Agent-->>User: final answer
+        else tool calls
+            Agent->>Registry: recursively validate arguments
+            Registry->>Tool: execute
+            Tool-->>Agent: observation tied to tool_call_id
+            Agent->>Agent: consecutive-failure and round guards
+        end
+    end
+```
+
+`StreamingToolCallAccumulator` 按 `index` 合并分散在多个 SSE delta 中的 `id`、函数名和 JSON 参数；完整 JSON 形成前不会进入工具层。
+
+重复失败熔断只统计“连续相同调用 + 相同错误码”。成功调用或不同失败会重置计数，避免历史偶发失败造成误熔断。
+
+### Plan-and-Execute DAG
+
+Planner 只返回 JSON 图；Java 在执行前拒绝未知依赖、自依赖和环。每个下游节点会收到其直接依赖节点的真实输出：
+
+```text
+Overall objective: ...
+Current node verify: ...
+Direct dependency outputs (trusted execution evidence):
+- implement: changed src/OrderValidator.java; tests passed
+```
+
+节点默认 `parallelSafe=false`。只有同一 ready batch 中明确标记为安全的节点才进入有界线程池；`exclusiveResources` 相交的任务即使标记为安全也会串行，执行报告始终按计划顺序输出。
 
 ```mermaid
 stateDiagram-v2
-    [*] --> NEW
-    NEW --> STARTING: start(timeout)
-    STARTING --> READY: initialize response + initialized notification
-    STARTING --> FAILED: spawn / HTTP / timeout / protocol error
-    READY --> READY: tools/list and tools/call
-    READY --> CLOSED: close()
-    FAILED --> CLOSED: transport cleanup
-    CLOSED --> CLOSED: idempotent close
+    [*] --> WAITING
+    WAITING --> RUNNING: dependencies SUCCEEDED
+    RUNNING --> SUCCEEDED: worker completed
+    RUNNING --> FAILED: worker/tool/error/limit
+    WAITING --> BLOCKED: dependency FAILED or BLOCKED
 ```
 
-- **stdio**：启动参数数组形式的子进程，以逐行 JSON-RPC 通信；请求超时会取消等待，关闭时先正常销毁再强制结束。
-- **Streamable HTTP**：支持 JSON 和 `text/event-stream` 响应，保存服务端返回的 `Mcp-Session-Id` 并用于后续请求。
-- **握手**：发送 `initialize`，验证 `protocolVersion`，再发送 `notifications/initialized`。
-- **动态工具**：`tools/list` 结果包装为 `mcp__{server}__{tool}`，仍经过统一 ToolRegistry Schema 校验。
-- **失败清理**：启动或握手任一步失败都会进入 `FAILED` 并关闭 transport；`close()` 幂等。
+最大并行度由 `YOU_AGENT_PLAN_MAX_PARALLELISM` 配置，范围 1–32，默认 4。
 
-当前实现不声称支持 OAuth、sampling 或服务端自动重启。
+## 工具与安全边界
 
-## 测试与真实实验结果
+内置工具：
 
-一条命令完成 Java 17 编译、单元测试、离线演示和 25 项 benchmark：
+```text
+read_file / write_file / list_directory / glob_files / grep_code / execute_command
+search_code / index_codebase / find_symbol / find_relations
+```
+
+- 文件工具通过规范化路径和符号链接检查限制在 workspace 内。
+- ToolRegistry 递归验证 object、array、items、required、enum 和 `additionalProperties`。
+- `execute_command` 接收参数数组，不拼 shell 字符串；读取时最多保留 64KB，但会继续排空管道避免子进程阻塞。
+- 命令超时会终止父进程和已发现的后代进程。
+- 命令的启动目录是 workspace，但它**不是容器沙箱**；进程仍拥有当前 OS 账号允许的文件和网络权限。
+
+## 代码检索
+
+JavaParser 产生 `FILE / CLASS / METHOD` 块，SQLite 持久化文件、符号、行号、源码证据、向量和 `CONTAINS / EXTENDS / IMPLEMENTS / CALLS / IMPORTS` 关系。
+
+Agent 可自主调用：
+
+- `search_code`：自然语言/符号混合检索，缺少索引时自动安全构建。
+- `index_codebase`：显式重建索引。
+- `find_symbol`：按类或方法名查找。
+- `find_relations`：查询代码关系。
+
+每条结果含路径、符号、行号、块类型、分数和截断后的代码证据；单次工具结果上限 12,000 字符。
+
+默认 `FeatureHashEmbeddingModel` 是**离线、可重复的词法特征哈希基线**，不是学习得到的专业语义 Embedding。默认混合分数：
+
+```text
+score = 0.52 * vector cosine + 0.40 * lexical coverage + type boost
+```
+
+显式配置下列变量后可切换 OpenAI-compatible Embedding；缺少任一关键字段时继续使用 Feature Hash：
+
+```dotenv
+YOU_AGENT_EMBEDDING_API_KEY=replace_with_your_own_embedding_key
+YOU_AGENT_EMBEDDING_BASE_URL=https://api.example.com/v1
+YOU_AGENT_EMBEDDING_MODEL=replace_with_embedding_model
+```
+
+## MCP 主链路
+
+将 [mcp.example.json](mcp.example.json) 复制为 `.you-agent/mcp.json`，启用并填写自己的 server。支持环境变量占位符 `${VAR}`，解析后的值不会写入状态或日志。
+
+```json
+{
+  "servers": {
+    "local": {
+      "transport": "stdio",
+      "command": ["my-mcp-server", "--stdio"],
+      "env": {"TOKEN": "${MY_MCP_TOKEN}"},
+      "timeoutSeconds": 15
+    },
+    "remote": {
+      "transport": "streamable-http",
+      "url": "https://mcp.example.com/mcp",
+      "headers": {"Authorization": "Bearer ${MY_MCP_TOKEN}"}
+    }
+  }
+}
+```
+
+启动链路为：
+
+```text
+load config → create transport → initialize → validate negotiated version
+→ notifications/initialized → tools/list → register mcp__{server}__{tool}
+```
 
 ```powershell
-.\run.ps1 --verify
+.\run.ps1 --mcp-status
 ```
 
-核心测试：
+初始化失败会关闭 Client/Transport 并记录 `FAILED`；CLI 结束按逆序关闭所有 Client。stdio 请求超时会关闭进程和 stdout reader，使阻塞读取任务可以退出。Streamable HTTP 支持 JSON、SSE 和 `Mcp-Session-Id` 复用。
 
-| 能力 | 关键测试 | 主要断言 |
+当前支持 `initialize`、`tools/list`、`tools/call`、stdio 和 Streamable HTTP；暂不支持 OAuth、sampling、resources/prompts、服务端自动重启和会话恢复。
+
+## 上下文与 Memory
+
+- 当前会话保存 system/user/assistant/tool 消息；跨会话事实只有显式 `--save` 或 `/save` 才写入 JSONL。
+- Token 估算覆盖消息内容、Tool Call ID/名称/参数和工具结果。
+- 默认达到预算 80% 时裁剪超长工具输出、保留最近两个 user turn，并摘要更早历史。
+- 摘要提示和确定性降级摘要都会保留关键工具调用、修改文件、验证结果与失败路径。
+- 长期记忆检索同时使用普通词项和可解释的中文 1–3 字 N-gram；默认只注入最相关的 5 条事实。
+
+## 失败处理与终止
+
+| 场景 | 确定性行为 | 状态/错误 |
 |---|---|---|
-| ReAct | `ReActAgentTest` | 工具结果回灌、最大轮次、重复失败熔断 |
-| DAG | `ExecutionPlanTest`, `PlanExecuteAgentTest` | 拓扑顺序、环检测、失败传播、自然语言计划执行 |
-| Memory | `MemoryTest` | scope、持久化、检索、删除、压缩与最近任务保留 |
-| 代码检索 | `CodeSearchTest` | AST 块、混合排序、SQLite、类方法关系 |
-| Function Calling | `StreamingToolCallAccumulatorTest` | 多 delta 的 id/name/arguments 增量合并 |
-| MCP | `McpClientTest` | initialize、工具发现/调用、关闭 |
-| 安全工具层 | `ToolRegistryTest` | Schema 拒绝与路径逃逸拒绝 |
+| 模型返回最终文本且无工具 | 完成 | `COMPLETED` |
+| 达到最大轮次 | 停止继续请求 | `MAX_ROUNDS` |
+| 连续三次相同失败 | 熔断 | `REPEATED_FAILURE` |
+| 空内容且无工具 | 立即停止 | `EMPTY_RESPONSE` |
+| provider length finish reason | 保留已有内容并停止 | `LENGTH_LIMIT` |
+| HTTP/解析异常 | 不输出 Key | `CLIENT_ERROR` |
+| 工具缺失或参数错误 | 结构化回灌 | `UNKNOWN_TOOL` / `INVALID_ARGUMENTS` |
+| 路径逃逸 | 拒绝 | `POLICY_DENIED` |
+| 命令超时/非零退出 | 终止树或回灌输出 | `TIMEOUT` / `NON_ZERO_EXIT` |
+| DAG 父节点失败 | 传递依赖阻塞，独立分支继续 | `FAILED` / `BLOCKED` |
 
-固定实验定义见 [benchmarks/tasks.json](benchmarks/tasks.json)，最新机器生成报告见 [benchmarks/results/latest.md](benchmarks/results/latest.md)。
+## 验证与评测
 
-当前基线（Java 17.0.16 / Windows 11 amd64 / 2026-08-22）：**25/25 PASS**。
+四类证据不混用：
 
-| Area | Tasks | Result |
+| 类型 | 命令 | 证明什么 | 不证明什么 |
+|---|---|---|---|
+| JUnit + JaCoCo | `mvn clean verify` | 状态机、协议、校验、进程、持久化回归 | 在线模型质量 |
+| deterministic offline conformance benchmark | `--benchmark` | 25 个固定场景的确定性工程一致性 | 模型任务完成率 |
+| 代码检索评测 | `--retrieval-eval` | 人工标注数据上的 Recall@5、MRR@10、延迟 | 大规模语义搜索质量 |
+| 在线 Agent 评测 | `--eval` | 真实模型在临时工作区的完成率、轮次、工具数、耗时、估算 Token | 跨模型永久排名 |
+
+固定 25 项定义见 [benchmarks/tasks.json](benchmarks/tasks.json)，实际运行报告见 [benchmarks/results/latest.md](benchmarks/results/latest.md)：**25/25 PASS**。
+
+代码检索数据集见 [eval/retrieval/ground-truth.json](eval/retrieval/ground-truth.json)，实际生成报告见 [eval/results/retrieval-latest.md](eval/results/retrieval-latest.md)。当前 8 条夹具基线：
+
+| 配置 | Recall@5 | MRR@10 |
 |---|---:|---:|
-| ReAct | 5 | 5/5 |
-| DAG | 5 | 5/5 |
-| Memory | 5 | 5/5 |
-| CodeSearch | 5 | 5/5 |
-| Tools | 3 | 3/3 |
-| MCP | 2 | 2/2 |
+| keyword-only | 1.000 | 1.000 |
+| Feature Hash hybrid | 1.000 | 1.000 |
 
-这些是确定性离线工程实验，证明状态机、持久化、工具与协议行为；它们不冒充在线 LLM 回答质量评测。
+数据集很小，结果用于证明评测链路可复现，不代表真实大型仓库效果。
 
-## 公开前安全边界
+在线评测含代码定位、文件修改、命令执行、错误恢复和 Plan 五类任务，使用文件内容、退出码及真实工具事件验证。必须显式配置模型和 Key；仓库当前**不提交在线结果**，因为没有在公开发布环境中执行真实模型调用。不存在随机 PASS、硬编码成功或手工日志。
 
-- `.env`、`.tools/`、`target/`、运行日志、Memory 和 SQLite 索引均不进入 Git。
-- `.env.example` 只含占位符；仓库不包含 API Key、Bearer token、公司域名、公司代码、公司数据或内部文档。
-- 文件工具只能访问 workspace；命令使用参数数组且有拒绝列表和超时。
-- 测试和 benchmark 全部使用合成夹具及临时目录。
-- CI 会在 Java 17 上执行测试、演示、benchmark 和基础密钥模式扫描。
+CI 在 Java 17 执行 `clean verify`、Demo、25 项一致性评测、检索评测、密钥扫描和 JaCoCo 上传，并在 Java 21 再验证 Java 17 字节码兼容性。
 
-安全问题请参阅 [SECURITY.md](SECURITY.md)。
+## 常用命令
+
+```text
+.\run.ps1 --once "定位并解释认证逻辑"
+.\run.ps1 --plan "定位问题、修改并运行测试"
+.\run.ps1 --index
+.\run.ps1 --search "token validation"
+.\run.ps1 --retrieval-eval
+.\run.ps1 --eval
+.\run.ps1 --save "本项目统一使用 Java 17"
+.\run.ps1 --memory
+.\run.ps1 --mcp-status
+```
+
+## 技术选型
+
+| 选择 | 用途与理由 | 主要取舍 |
+|---|---|---|
+| Java 17 | LTS、明确类型和成熟 IO/并发原语，适合展示协议与状态机 | 终端 UI 保持轻量 |
+| Jackson | Function Calling、MCP、配置与报告 JSON | 协议 DTO 自行维护 |
+| OkHttp | LLM SSE、Embedding、Streamable HTTP MCP | 不绑定厂商 SDK |
+| JavaParser | 稳定的类/方法边界与行号 | 当前索引仅覆盖 Java |
+| SQLite JDBC | 单文件保存块、向量和关系 | 相似度在 Java 侧计算，面向中小仓库 |
+| Feature Hash | 零 Key、离线可重复基线 | 不具备专业语义 Embedding 质量 |
+| Maven Shade | 单 JAR 交付 | JAR 体积包含依赖 |
+| JUnit 5 + JaCoCo | 回归验证与覆盖率报告 | 覆盖率不等于模型质量 |
+
+没有引入 LangChain/Spring AI：仓库目标是让 ReAct、DAG、工具协议、压缩和 MCP 生命周期在代码中可直接阅读与追问。
+
+## 当前限制
+
+- Feature Hash 仅是词法向量基线；大型或跨语言仓库需要专业 Embedding、增量索引和向量数据库优化。
+- `execute_command` 不是容器/VM 沙箱；生产环境应增加容器隔离、网络策略和更强审批。
+- 在线 Agent 质量、费用和稳定性取决于用户选择的模型与 provider。
+- MCP 当前聚焦工具调用；OAuth、sampling、resources/prompts、自动重启和 recovery 尚未实现。
+- DAG 的 `parallelSafe` 与 `exclusiveResources` 依赖计划声明；默认 false 保持保守，但这不是通用事务型文件锁系统。
+- 在线评测仅含五个公开固定任务，不能代表真实软件工程分布。
+
+后续计划见 [ROADMAP.md](ROADMAP.md)，版本变化见 [CHANGELOG.md](CHANGELOG.md)。
 
 ## 项目结构
 
 ```text
 src/main/java/dev/youagent/
-├── agent/       ReAct loop, exit reasons and trace events
-├── plan/        JSON planner, DAG validation, states and execution
-├── tool/        registry, schemas, workspace policy and built-in tools
-├── memory/      explicit long-term facts and context compaction
-├── search/      JavaParser chunks, embedding, SQLite and hybrid ranking
-├── mcp/         lifecycle, stdio/HTTP transports and dynamic tool adapter
-├── llm/         provider boundary and streaming tool-call merge
-├── benchmark/   25 deterministic experiment scenarios and report writer
-├── demo/        real offline end-to-end demonstration
-└── cli/         command-line entrypoint
+├── agent/       ReAct loop, events, deterministic exit reasons
+├── plan/        validated DAG, dependency context, controlled parallelism
+├── tool/        recursive schemas, workspace guard, bounded process execution
+├── search/      JavaParser, Feature Hash/remote embedding, SQLite, agent tools
+├── mcp/         config loader, manager, client, stdio/HTTP transports
+├── memory/      explicit facts, Chinese retrieval, context compaction
+├── llm/         OpenAI-compatible SSE and streaming tool-call merge
+├── eval/        retrieval metrics and real online-agent harness
+├── benchmark/   25 deterministic offline conformance scenarios
+├── demo/        offline end-to-end demo
+└── cli/         command entrypoint
 ```
 
-面试阅读建议：`ReActAgent` → `ToolRegistry` → `ExecutionPlan` → `ContextCompactor` → `SqliteCodeIndex` → `McpClient`。
+## 安全、来源与许可证
 
-## 来源与许可证
+- `.env`、`.you-agent/`、`target/`、`.tools/`、Memory、索引和在线评测结果不进入 Git。
+- 测试、离线评测和检索夹具均为公开合成数据；仓库不含 API Key、公司代码、公司数据或内部 URL。
+- 详细安全边界见 [SECURITY.md](SECURITY.md)。
+- 本项目使用 MIT License；来源声明见 [NOTICE.md](NOTICE.md)，依赖许可证见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
 
-本项目使用 MIT License。第三方 Maven 依赖保留各自许可证。
-
-You Agent CLI 与 PaiCLI 无隶属关系。PaiCLI 的公开产品描述启发了功能范围，但本仓库没有复制其非开源 Java 版本的实现或资产；详情及参考资料见 [NOTICE.md](NOTICE.md)。依赖许可证摘要见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
+本仓库由作者独立设计与实现，未引入未经授权的非开源代码、Prompt、测试、付费教程文档或图片。

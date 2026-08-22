@@ -3,10 +3,13 @@ package dev.youagent.search;
 import java.nio.charset.StandardCharsets;
 import java.util.Locale;
 
-public final class HashEmbeddingModel implements EmbeddingModel {
+/**
+ * Deterministic lexical feature hashing. This is an offline baseline, not a learned semantic embedding.
+ */
+public final class FeatureHashEmbeddingModel implements EmbeddingModel {
     private final int dimensions;
 
-    public HashEmbeddingModel(int dimensions) {
+    public FeatureHashEmbeddingModel(int dimensions) {
         if (dimensions < 32) {
             throw new IllegalArgumentException("dimensions must be at least 32");
         }
@@ -28,6 +31,11 @@ public final class HashEmbeddingModel implements EmbeddingModel {
         }
         normalize(vector);
         return vector;
+    }
+
+    @Override
+    public String id() {
+        return "feature-hash:" + dimensions;
     }
 
     private static long fnv1a(String token) {

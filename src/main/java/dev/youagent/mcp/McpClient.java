@@ -6,13 +6,17 @@ import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
 import java.io.IOException;
+import java.io.InterruptedIOException;
+import java.net.SocketTimeoutException;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicLong;
 
 public final class McpClient implements AutoCloseable {
     public static final String PROTOCOL_VERSION = "2025-03-26";
+    public static final Set<String> SUPPORTED_PROTOCOL_VERSIONS = Set.of(PROTOCOL_VERSION);
     private final String serverName;
     private final McpTransport transport;
     private final ObjectMapper mapper = new ObjectMapper();
@@ -41,12 +45,13 @@ public final class McpClient implements AutoCloseable {
             params.set("capabilities", mapper.createObjectNode());
             ObjectNode clientInfo = params.putObject("clientInfo");
             clientInfo.put("name", "you-agent-cli");
-            clientInfo.put("version", "0.1.0");
+            clientInfo.put("version", "0.2.0-SNAPSHOT");
             JsonNode response = request("initialize", params, remaining(deadline));
             JsonNode result = result(response);
             negotiatedProtocol = result.path("protocolVersion").asText();
-            if (negotiatedProtocol.isBlank()) {
-                throw new IOException("MCP initialize response omitted protocolVersion");
+            if (!SUPPORTED_PROTOCOL_VERSIONS.contains(negotiatedProtocol)) {
+                throw new IOException("Unsupported MCP protocol version: "
+                        + (negotiatedProtocol.isBlank() ? "<missing>" : negotiatedProtocol));
             }
             ObjectNode initialized = notification("notifications/initialized", mapper.createObjectNode());
             transport.notify(initialized);
@@ -109,7 +114,14 @@ public final class McpClient implements AutoCloseable {
         request.put("id", ids.getAndIncrement());
         request.put("method", method);
         request.set("params", params);
-        return transport.request(request, timeout);
+        try {
+            return transport.request(request, timeout);
+        } catch (IOException failure) {
+            if (lifecycle == McpLifecycle.READY && isTimeout(failure)) {
+                failAndClose(failure);
+            }
+            throw failure;
+        }
     }
 
     private ObjectNode notification(String method, JsonNode params) {
@@ -135,6 +147,33 @@ public final class McpClient implements AutoCloseable {
         if (lifecycle != McpLifecycle.READY) {
             throw new IOException("MCP client is not ready: " + lifecycle);
         }
+    }
+
+    private synchronized void failAndClose(IOException failure) {
+        lifecycle = McpLifecycle.FAILED;
+        try {
+            transport.close();
+        } catch (IOException closeFailure) {
+            failure.addSuppressed(closeFailure);
+        }
+    }
+
+    private static boolean isTimeout(Throwable failure) {
+        Throwable current = failure;
+        while (current != null) {
+            if (current instanceof SocketTimeoutException || current instanceof InterruptedIOException) {
+                return true;
+            }
+            String message = current.getMessage();
+            if (message != null) {
+                String lower = message.toLowerCase();
+                if (lower.contains("timed out") || lower.contains("timeout")) {
+                    return true;
+                }
+            }
+            current = current.getCause();
+        }
+        return false;
     }
 
     private static Duration remaining(long deadline) throws IOException {

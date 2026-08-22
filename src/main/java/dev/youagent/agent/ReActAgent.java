@@ -10,9 +10,7 @@ import dev.youagent.tool.ToolRegistry;
 
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.function.BooleanSupplier;
 
 public final class ReActAgent {
@@ -50,7 +48,8 @@ public final class ReActAgent {
         history.add(ChatMessage.system(systemPrompt));
         history.add(ChatMessage.user(task));
         List<AgentEvent> events = new ArrayList<>();
-        Map<String, Integer> failedFingerprints = new HashMap<>();
+        String lastFailureFingerprint = null;
+        int consecutiveIdenticalFailures = 0;
 
         for (int round = 1; round <= maxRounds; round++) {
             if (cancelled.getAsBoolean()) {
@@ -96,10 +95,18 @@ public final class ReActAgent {
                 events.add(new AgentEvent(AgentEvent.Type.TOOL_RESULT, round, call.name(),
                         execution.toModelText(), execution.success()));
                 history.add(ChatMessage.tool(call.id(), execution.toModelText()));
-                if (!execution.success()) {
+                if (execution.success()) {
+                    lastFailureFingerprint = null;
+                    consecutiveIdenticalFailures = 0;
+                } else {
                     String fingerprint = call.name() + "|" + call.arguments() + "|" + execution.errorCode();
-                    int attempts = failedFingerprints.merge(fingerprint, 1, Integer::sum);
-                    if (attempts >= 3) {
+                    if (fingerprint.equals(lastFailureFingerprint)) {
+                        consecutiveIdenticalFailures++;
+                    } else {
+                        lastFailureFingerprint = fingerprint;
+                        consecutiveIdenticalFailures = 1;
+                    }
+                    if (consecutiveIdenticalFailures >= 3) {
                         return terminate(AgentResult.ExitReason.REPEATED_FAILURE,
                                 "Stopped after three identical failed tool calls", round, events, history);
                     }

@@ -98,9 +98,38 @@ public final class LongTermMemory {
         for (String token : text.toLowerCase(Locale.ROOT).split("[^\\p{L}\\p{N}_]+")) {
             if (!token.isBlank()) {
                 terms.add(token);
+                addCjkNgrams(token, terms);
             }
         }
         return terms;
+    }
+
+    private static void addCjkNgrams(String token, Set<String> terms) {
+        List<Integer> run = new ArrayList<>();
+        token.codePoints().forEach(codePoint -> {
+            if (Character.UnicodeScript.of(codePoint) == Character.UnicodeScript.HAN) {
+                run.add(codePoint);
+            } else {
+                addRunNgrams(run, terms);
+                run.clear();
+            }
+        });
+        addRunNgrams(run, terms);
+    }
+
+    private static void addRunNgrams(List<Integer> run, Set<String> terms) {
+        if (run.isEmpty()) {
+            return;
+        }
+        for (int size = 1; size <= Math.min(3, run.size()); size++) {
+            for (int start = 0; start + size <= run.size(); start++) {
+                StringBuilder value = new StringBuilder();
+                for (int i = start; i < start + size; i++) {
+                    value.appendCodePoint(run.get(i));
+                }
+                terms.add(value.toString());
+            }
+        }
     }
 
     private static int score(String content, Set<String> queryTerms) {

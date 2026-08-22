@@ -27,7 +27,7 @@ class CodeSearchTest {
                 """);
         Path database = workspace.resolve(".you-agent/index.db");
 
-        try (SqliteCodeIndex index = new SqliteCodeIndex(workspace, database, new HashEmbeddingModel(128))) {
+        try (SqliteCodeIndex index = new SqliteCodeIndex(workspace, database, new FeatureHashEmbeddingModel(128))) {
             int chunks = index.rebuild();
             var hits = index.search("authenticate user token", 5);
 

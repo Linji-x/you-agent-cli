@@ -1,0 +1,10 @@
+[
+  {"id":"Q01","query":"authenticate a bearer token","targetSymbol":"AuthService#authenticateToken(String)"},
+  {"id":"Q02","query":"reject an expired user token","targetSymbol":"AuthService#authenticateToken(String)"},
+  {"id":"Q03","query":"validate that an order total is positive","targetSymbol":"OrderValidator#validateTotal(BigDecimal)"},
+  {"id":"Q04","query":"decide whether another retry attempt is allowed","targetSymbol":"RetryPolicy#shouldRetry(int, int)"},
+  {"id":"Q05","query":"load a user account by email address","targetSymbol":"UserRepository#findByEmail(String)"},
+  {"id":"Q06","query":"publish an order domain event","targetSymbol":"EventPublisher#publish(OrderEvent)"},
+  {"id":"Q07","query":"maximum attempts backoff policy","targetSymbol":"RetryPolicy#shouldRetry(int, int)"},
+  {"id":"Q08","query":"repository email lookup returning optional","targetSymbol":"UserRepository#findByEmail(String)"}
+]
