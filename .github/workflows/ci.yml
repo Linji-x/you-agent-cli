@@ -1,0 +1,32 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: maven
+      - name: Test and package
+        run: mvn --batch-mode clean test package
+      - name: Offline end-to-end demo
+        run: java -jar target/you-agent-cli.jar --demo
+      - name: Fixed 25-task benchmark
+        run: java -jar target/you-agent-cli.jar --benchmark
+      - name: Basic secret-pattern gate
+        shell: bash
+        run: |
+          if git grep -nE -- '-----BEGIN (RSA |EC |OPENSSH |DSA )?PRIVATE KEY-----|sk-[A-Za-z0-9_-]{20,}|gh[pousr]_[A-Za-z0-9]{20,}' -- ':!.env.example'; then
+            echo 'Potential committed secret pattern detected.' >&2
+            exit 1
+          fi

@@ -1,0 +1,9 @@
+.env
+.idea/
+.vscode/
+.tools/
+target/
+*.iml
+*.log
+.you-agent/
+benchmarks/results/*.tmp

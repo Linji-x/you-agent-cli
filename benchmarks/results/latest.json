@@ -1,0 +1,183 @@
+{
+  "generatedAt" : 1787400953.601914400,
+  "javaVersion" : "17.0.16",
+  "os" : "Windows 11 amd64",
+  "total" : 25,
+  "passed" : 25,
+  "results" : [ {
+    "id" : "R01",
+    "category" : "ReAct",
+    "passed" : true,
+    "durationMs" : 92,
+    "evidence" : "COMPLETED in 2 rounds; tool result present",
+    "error" : ""
+  }, {
+    "id" : "R02",
+    "category" : "ReAct",
+    "passed" : true,
+    "durationMs" : 3,
+    "evidence" : "MAX_ROUNDS at round 2",
+    "error" : ""
+  }, {
+    "id" : "R03",
+    "category" : "ReAct",
+    "passed" : true,
+    "durationMs" : 6,
+    "evidence" : "REPEATED_FAILURE after 3 identical failures",
+    "error" : ""
+  }, {
+    "id" : "R04",
+    "category" : "ReAct",
+    "passed" : true,
+    "durationMs" : 0,
+    "evidence" : "COMPLETED in 1 round with no tools",
+    "error" : ""
+  }, {
+    "id" : "R05",
+    "category" : "ReAct",
+    "passed" : true,
+    "durationMs" : 1,
+    "evidence" : "INVALID_ARGUMENTS fed back; next round COMPLETED",
+    "error" : ""
+  }, {
+    "id" : "D01",
+    "category" : "DAG",
+    "passed" : true,
+    "durationMs" : 3,
+    "evidence" : "inspect -> generate -> verify",
+    "error" : ""
+  }, {
+    "id" : "D02",
+    "category" : "DAG",
+    "passed" : true,
+    "durationMs" : 1,
+    "evidence" : "root=FAILED; child=BLOCKED",
+    "error" : ""
+  }, {
+    "id" : "D03",
+    "category" : "DAG",
+    "passed" : true,
+    "durationMs" : 0,
+    "evidence" : "cycle rejected: cycle detected: a -> b -> a",
+    "error" : ""
+  }, {
+    "id" : "D04",
+    "category" : "DAG",
+    "passed" : true,
+    "durationMs" : 0,
+    "evidence" : "supplemental fix task SUCCEEDED",
+    "error" : ""
+  }, {
+    "id" : "D05",
+    "category" : "DAG",
+    "passed" : true,
+    "durationMs" : 0,
+    "evidence" : "left and right SUCCEEDED",
+    "error" : ""
+  }, {
+    "id" : "M01",
+    "category" : "Memory",
+    "passed" : true,
+    "durationMs" : 30,
+    "evidence" : "1 fact visible after reopen",
+    "error" : ""
+  }, {
+    "id" : "M02",
+    "category" : "Memory",
+    "passed" : true,
+    "durationMs" : 20,
+    "evidence" : "alpha sees global+alpha only",
+    "error" : ""
+  }, {
+    "id" : "M03",
+    "category" : "Memory",
+    "passed" : true,
+    "durationMs" : 27,
+    "evidence" : "SQLite fact ranked first",
+    "error" : ""
+  }, {
+    "id" : "M04",
+    "category" : "Memory",
+    "passed" : true,
+    "durationMs" : 20,
+    "evidence" : "fact deleted by id",
+    "error" : ""
+  }, {
+    "id" : "M05",
+    "category" : "Memory",
+    "passed" : true,
+    "durationMs" : 4,
+    "evidence" : "511 -> 67 estimated tokens",
+    "error" : ""
+  }, {
+    "id" : "S01",
+    "category" : "CodeSearch",
+    "passed" : true,
+    "durationMs" : 394,
+    "evidence" : "4 AST chunks indexed",
+    "error" : ""
+  }, {
+    "id" : "S02",
+    "category" : "CodeSearch",
+    "passed" : true,
+    "durationMs" : 26,
+    "evidence" : "AccountService#loadAccount(String) ranked first",
+    "error" : ""
+  }, {
+    "id" : "S03",
+    "category" : "CodeSearch",
+    "passed" : true,
+    "durationMs" : 19,
+    "evidence" : "AccountService CONTAINS method relation stored",
+    "error" : ""
+  }, {
+    "id" : "S04",
+    "category" : "CodeSearch",
+    "passed" : true,
+    "durationMs" : 22,
+    "evidence" : "search succeeded after SQLite reopen",
+    "error" : ""
+  }, {
+    "id" : "S05",
+    "category" : "CodeSearch",
+    "passed" : true,
+    "durationMs" : 20,
+    "evidence" : "AccountService symbol returned in top 3",
+    "error" : ""
+  }, {
+    "id" : "T01",
+    "category" : "Tools",
+    "passed" : true,
+    "durationMs" : 0,
+    "evidence" : "POLICY_DENIED",
+    "error" : ""
+  }, {
+    "id" : "T02",
+    "category" : "Tools",
+    "passed" : true,
+    "durationMs" : 0,
+    "evidence" : "INVALID_ARGUMENTS: missing path",
+    "error" : ""
+  }, {
+    "id" : "T03",
+    "category" : "Tools",
+    "passed" : true,
+    "durationMs" : 3,
+    "evidence" : "round-trip-ok",
+    "error" : ""
+  }, {
+    "id" : "P01",
+    "category" : "MCP",
+    "passed" : true,
+    "durationMs" : 1,
+    "evidence" : "initialize -> initialized -> READY -> CLOSED",
+    "error" : ""
+  }, {
+    "id" : "P02",
+    "category" : "MCP",
+    "passed" : true,
+    "durationMs" : 1,
+    "evidence" : "mcp__demo__echo returned hello-mcp",
+    "error" : ""
+  } ]
+}
