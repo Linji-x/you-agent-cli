@@ -1,0 +1,32 @@
+[
+  {
+    "id": "E01",
+    "category": "code-location",
+    "planMode": false,
+    "prompt": "Use the code-index tools to locate the method that authenticates tokens. Write its exact class and method symbol to eval-locate.txt, then verify the file."
+  },
+  {
+    "id": "E02",
+    "category": "file-modification",
+    "planMode": false,
+    "prompt": "Change message.txt so its complete content is status=ready followed by a newline. Read it back to verify."
+  },
+  {
+    "id": "E03",
+    "category": "command-execution",
+    "planMode": false,
+    "prompt": "Run CommandFixture.java with Java so it creates command.ok. Read command.ok and verify its exact content."
+  },
+  {
+    "id": "E04",
+    "category": "error-recovery",
+    "planMode": false,
+    "prompt": "Run Broken.java first and observe the real compiler error. Then fix it so running it writes recovery.ok containing recovered. Run it again and verify recovery.ok."
+  },
+  {
+    "id": "E05",
+    "category": "plan-and-execute",
+    "planMode": true,
+    "prompt": "Plan and execute these dependent steps: inspect the workspace, create plan-result.txt containing exactly planned, then read it back and verify it."
+  }
+]

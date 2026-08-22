@@ -8,6 +8,10 @@ import dev.youagent.benchmark.BenchmarkRunner;
 import dev.youagent.config.AppConfig;
 import dev.youagent.config.EmbeddingConfig;
 import dev.youagent.demo.DemoRunner;
+import dev.youagent.eval.OnlineAgentEvalRunner;
+import dev.youagent.eval.OnlineEvaluationReport;
+import dev.youagent.eval.RetrievalEvaluationReport;
+import dev.youagent.eval.RetrievalEvaluationRunner;
 import dev.youagent.llm.OpenAiCompatibleClient;
 import dev.youagent.memory.ContextCompactor;
 import dev.youagent.memory.LlmContextSummarizer;
@@ -68,6 +72,8 @@ public final class YouAgentCli {
                 yield 0;
             }
             case "--benchmark" -> runBenchmark(workspace);
+            case "--retrieval-eval" -> runRetrievalEvaluation(workspace);
+            case "--eval" -> runOnlineEvaluation(workspace);
             case "--once" -> runOnce(workspace, joinTail(args));
             case "--plan" -> runPlan(workspace, joinTail(args));
             case "--index" -> rebuildIndex(workspace);
@@ -165,6 +171,31 @@ public final class YouAgentCli {
         BenchmarkReport report = new BenchmarkRunner().run(workspace.toAbsolutePath().normalize());
         System.out.println("Benchmark: " + report.passed() + "/" + report.total() + " passed");
         System.out.println("Report: benchmarks/results/latest.md");
+        return report.passed() == report.total() ? 0 : 1;
+    }
+
+    private static int runRetrievalEvaluation(Path workspace) throws Exception {
+        RetrievalEvaluationReport report = new RetrievalEvaluationRunner().run(
+                workspace.toAbsolutePath().normalize(), EmbeddingConfig.load(workspace));
+        for (var configuration : report.configurations()) {
+            System.out.printf("%s Recall@5=%.3f MRR@10=%.3f latency=%.3fms%n", configuration.name(),
+                    configuration.recallAt5(), configuration.mrrAt10(), configuration.averageLatencyMs());
+        }
+        System.out.println("Report: eval/results/retrieval-latest.md");
+        return 0;
+    }
+
+    private static int runOnlineEvaluation(Path workspace) throws Exception {
+        AppConfig config = AppConfig.load(workspace);
+        if (!config.hasProviderCredentials()) {
+            System.err.println("--eval requires explicit YOU_AGENT_API_KEY, YOU_AGENT_BASE_URL, and YOU_AGENT_MODEL");
+            return 2;
+        }
+        OnlineEvaluationReport report = new OnlineAgentEvalRunner().run(
+                workspace.toAbsolutePath().normalize(), config);
+        System.out.printf("Online evaluation: %d/%d passed (%.1f%%)%n", report.passed(), report.total(),
+                report.completionRate() * 100);
+        System.out.println("Report: eval/results/online-latest.md");
         return report.passed() == report.total() ? 0 : 1;
     }
 
@@ -300,6 +331,8 @@ public final class YouAgentCli {
                 Commands:
                   --demo                 offline input -> plan -> tools -> result demo
                   --benchmark            run 25 fixed offline experiments and write reports
+                  --retrieval-eval       run the labeled code-retrieval evaluation
+                  --eval                 run real model-backed agent tasks (credentials required)
                   --once <task>          run one ReAct task with configured provider
                   --plan <task>          generate a DAG and execute its nodes with ReAct
                   --index                rebuild the local Java AST/SQLite index

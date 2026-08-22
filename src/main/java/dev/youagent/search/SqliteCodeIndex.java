@@ -77,6 +77,10 @@ public final class SqliteCodeIndex implements AutoCloseable {
     }
 
     public synchronized List<SearchHit> search(String query, int limit) throws SQLException, IOException {
+        return search(query, limit, SearchMode.HYBRID);
+    }
+
+    public synchronized List<SearchHit> search(String query, int limit, SearchMode mode) throws SQLException, IOException {
         double[] queryVector = embeddingModel.embed(query);
         Set<String> queryTerms = tokenize(query);
         List<SearchHit> hits = new ArrayList<>();
@@ -85,13 +89,15 @@ public final class SqliteCodeIndex implements AutoCloseable {
             while (rows.next()) {
                 CodeChunk chunk = readChunk(rows);
                 double lexical = lexicalScore(chunk, queryTerms);
-                double semantic = cosine(queryVector, chunk.embedding());
+                double semantic = mode == SearchMode.HYBRID ? cosine(queryVector, chunk.embedding()) : 0;
                 double typeBoost = switch (chunk.type()) {
                     case METHOD -> 0.08;
                     case CLASS -> 0.04;
                     case FILE -> 0.0;
                 };
-                double score = 0.52 * semantic + 0.40 * lexical + typeBoost;
+                double score = mode == SearchMode.HYBRID
+                        ? 0.52 * semantic + 0.40 * lexical + typeBoost
+                        : lexical + typeBoost;
                 hits.add(new SearchHit(chunk, score, lexical, semantic));
             }
         }

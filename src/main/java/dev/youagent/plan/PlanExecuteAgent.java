@@ -3,15 +3,19 @@ package dev.youagent.plan;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.youagent.agent.AgentResult;
+import dev.youagent.agent.AgentEvent;
 import dev.youagent.agent.ReActAgent;
 import dev.youagent.llm.ChatMessage;
 import dev.youagent.llm.LlmClient;
 import dev.youagent.llm.LlmResponse;
 import dev.youagent.tool.ToolRegistry;
+import dev.youagent.memory.ContextCompactor;
 
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 public final class PlanExecuteAgent {
     private static final String PLANNER_PROMPT = """
@@ -55,6 +59,7 @@ public final class PlanExecuteAgent {
         }
         List<PlanTask> tasks = parseTasks(planning.content());
         ExecutionPlan plan = new ExecutionPlan(tasks);
+        Map<String, AgentResult> workerResults = new ConcurrentHashMap<>();
         ExecutionReport report = new DagExecutor(maxParallelism).execute(plan, (task, dependencies) -> {
             StringBuilder assignment = new StringBuilder("Overall objective: ").append(objective)
                     .append("\nCurrent node ").append(task.id()).append(": ").append(task.description());
@@ -64,10 +69,17 @@ public final class PlanExecuteAgent {
             }
             AgentResult result = new ReActAgent(client, tools, taskMaxRounds, WORKER_PROMPT)
                     .run(assignment.toString());
+            workerResults.put(task.id(), result);
             return result.completed() ? TaskOutcome.success(result.answer())
                     : TaskOutcome.failure(result.exitReason() + ": " + result.answer());
         });
-        return new PlanRunResult(tasks, report);
+        List<AgentEvent> events = tasks.stream().filter(task -> workerResults.containsKey(task.id()))
+                .flatMap(task -> workerResults.get(task.id()).events().stream()).toList();
+        int rounds = tasks.stream().filter(task -> workerResults.containsKey(task.id()))
+                .mapToInt(task -> workerResults.get(task.id()).rounds()).sum();
+        int estimatedTokens = tasks.stream().filter(task -> workerResults.containsKey(task.id()))
+                .mapToInt(task -> ContextCompactor.estimateTokens(workerResults.get(task.id()).history())).sum();
+        return new PlanRunResult(tasks, report, events, rounds, estimatedTokens);
     }
 
     public List<PlanTask> parseTasks(String raw) throws IOException {
