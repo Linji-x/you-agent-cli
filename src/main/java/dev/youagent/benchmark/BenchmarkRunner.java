@@ -19,6 +19,7 @@ import java.util.List;
 public final class BenchmarkRunner {
     private final ObjectMapper mapper = new ObjectMapper()
             .registerModule(new JavaTimeModule())
+            .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS)
             .enable(SerializationFeature.INDENT_OUTPUT);
     private final BenchmarkScenarios scenarios = new BenchmarkScenarios();
 
