@@ -1,5 +1,5 @@
 {
-  "generatedAt" : "2026-08-22T15:49:13.327385100Z",
+  "generatedAt" : "2026-08-22T15:54:36.038626500Z",
   "javaVersion" : "17.0.16",
   "os" : "Windows 11 amd64",
   "total" : 25,
@@ -8,42 +8,42 @@
     "id" : "R01",
     "category" : "ReAct",
     "passed" : true,
-    "durationMs" : 130,
+    "durationMs" : 97,
     "evidence" : "COMPLETED in 2 rounds; tool result present",
     "error" : ""
   }, {
     "id" : "R02",
     "category" : "ReAct",
     "passed" : true,
-    "durationMs" : 6,
+    "durationMs" : 4,
     "evidence" : "MAX_ROUNDS at round 2",
     "error" : ""
   }, {
     "id" : "R03",
     "category" : "ReAct",
     "passed" : true,
-    "durationMs" : 7,
+    "durationMs" : 5,
     "evidence" : "REPEATED_FAILURE after 3 identical failures",
     "error" : ""
   }, {
     "id" : "R04",
     "category" : "ReAct",
     "passed" : true,
-    "durationMs" : 1,
+    "durationMs" : 0,
     "evidence" : "COMPLETED in 1 round with no tools",
     "error" : ""
   }, {
     "id" : "R05",
     "category" : "ReAct",
     "passed" : true,
-    "durationMs" : 2,
+    "durationMs" : 1,
     "evidence" : "INVALID_ARGUMENTS fed back; next round COMPLETED",
     "error" : ""
   }, {
     "id" : "D01",
     "category" : "DAG",
     "passed" : true,
-    "durationMs" : 7,
+    "durationMs" : 8,
     "evidence" : "inspect -> generate -> verify",
     "error" : ""
   }, {
@@ -78,42 +78,42 @@
     "id" : "M01",
     "category" : "Memory",
     "passed" : true,
-    "durationMs" : 57,
+    "durationMs" : 34,
     "evidence" : "1 fact visible after reopen",
     "error" : ""
   }, {
     "id" : "M02",
     "category" : "Memory",
     "passed" : true,
-    "durationMs" : 20,
+    "durationMs" : 17,
     "evidence" : "alpha sees global+alpha only",
     "error" : ""
   }, {
     "id" : "M03",
     "category" : "Memory",
     "passed" : true,
-    "durationMs" : 21,
+    "durationMs" : 25,
     "evidence" : "SQLite fact ranked first",
     "error" : ""
   }, {
     "id" : "M04",
     "category" : "Memory",
     "passed" : true,
-    "durationMs" : 17,
+    "durationMs" : 20,
     "evidence" : "fact deleted by id",
     "error" : ""
   }, {
     "id" : "M05",
     "category" : "Memory",
     "passed" : true,
-    "durationMs" : 5,
+    "durationMs" : 4,
     "evidence" : "538 -> 87 estimated tokens",
     "error" : ""
   }, {
     "id" : "S01",
     "category" : "CodeSearch",
     "passed" : true,
-    "durationMs" : 475,
+    "durationMs" : 391,
     "evidence" : "4 AST chunks indexed",
     "error" : ""
   }, {
@@ -134,7 +134,7 @@
     "id" : "S04",
     "category" : "CodeSearch",
     "passed" : true,
-    "durationMs" : 23,
+    "durationMs" : 24,
     "evidence" : "search succeeded after SQLite reopen",
     "error" : ""
   }, {
@@ -155,7 +155,7 @@
     "id" : "T02",
     "category" : "Tools",
     "passed" : true,
-    "durationMs" : 1,
+    "durationMs" : 0,
     "evidence" : "INVALID_ARGUMENTS: missing path",
     "error" : ""
   }, {
@@ -169,7 +169,7 @@
     "id" : "P01",
     "category" : "MCP",
     "passed" : true,
-    "durationMs" : 1,
+    "durationMs" : 2,
     "evidence" : "initialize -> initialized -> READY -> CLOSED",
     "error" : ""
   }, {
