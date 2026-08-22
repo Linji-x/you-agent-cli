@@ -112,39 +112,88 @@ public final class ToolRegistry implements AutoCloseable {
     }
 
     private String validate(JsonNode arguments, ObjectNode schema) {
-        if (arguments == null || !arguments.isObject()) {
-            return "arguments must be a JSON object";
+        if (arguments == null) {
+            return "$ must not be null";
         }
-        List<String> missing = new ArrayList<>();
-        for (JsonNode required : schema.path("required")) {
-            String name = required.asText();
-            if (!arguments.has(name) || arguments.path(name).isNull()) {
-                missing.add(name);
+        return validateNode(arguments, schema, "$");
+    }
+
+    private String validateNode(JsonNode value, JsonNode schema, String path) {
+        String type = schema.path("type").asText("");
+        if (!type.isBlank() && !matchesType(value, type)) {
+            return path + " must be " + type;
+        }
+        if (schema.path("enum").isArray()) {
+            boolean matched = false;
+            for (JsonNode allowed : schema.path("enum")) {
+                if (allowed.equals(value)) {
+                    matched = true;
+                    break;
+                }
+            }
+            if (!matched) {
+                return path + " must match one of the allowed enum values";
             }
         }
-        if (!missing.isEmpty()) {
-            return "missing required fields: " + String.join(", ", missing);
-        }
-        JsonNode properties = schema.path("properties");
-        var fields = arguments.fields();
-        while (fields.hasNext()) {
-            var field = fields.next();
-            JsonNode expected = properties.path(field.getKey());
-            if (expected.isMissingNode()) {
-                return "unknown field: " + field.getKey();
+        if (value.isObject() && (type.equals("object") || schema.has("properties") || schema.has("required"))) {
+            List<String> missing = new ArrayList<>();
+            for (JsonNode required : schema.path("required")) {
+                String name = required.asText();
+                if (!value.has(name) || value.path(name).isNull()) {
+                    missing.add(name);
+                }
             }
-            String type = expected.path("type").asText();
-            boolean valid = switch (type) {
-                case "string" -> field.getValue().isTextual();
-                case "integer" -> field.getValue().isIntegralNumber();
-                case "array" -> field.getValue().isArray();
-                case "boolean" -> field.getValue().isBoolean();
-                default -> true;
-            };
-            if (!valid) {
-                return "field '" + field.getKey() + "' must be " + type;
+            if (!missing.isEmpty()) {
+                return path + " missing required fields: " + String.join(", ", missing);
+            }
+            JsonNode properties = schema.path("properties");
+            var fields = value.fields();
+            while (fields.hasNext()) {
+                var field = fields.next();
+                JsonNode expected = properties.path(field.getKey());
+                String childPath = path + "." + field.getKey();
+                if (expected.isMissingNode()) {
+                    JsonNode additional = schema.path("additionalProperties");
+                    if (additional.isBoolean() && !additional.asBoolean()) {
+                        return childPath + " is not allowed";
+                    }
+                    if (additional.isObject()) {
+                        String nested = validateNode(field.getValue(), additional, childPath);
+                        if (nested != null) {
+                            return nested;
+                        }
+                    }
+                    continue;
+                }
+                String nested = validateNode(field.getValue(), expected, childPath);
+                if (nested != null) {
+                    return nested;
+                }
+            }
+        }
+        if (value.isArray() && schema.path("items").isObject()) {
+            int index = 0;
+            for (JsonNode item : value) {
+                String nested = validateNode(item, schema.path("items"), path + "[" + index + "]");
+                if (nested != null) {
+                    return nested;
+                }
+                index++;
             }
         }
         return null;
+    }
+
+    private static boolean matchesType(JsonNode value, String type) {
+        return switch (type) {
+            case "object" -> value.isObject();
+            case "array" -> value.isArray();
+            case "string" -> value.isTextual();
+            case "integer" -> value.isIntegralNumber();
+            case "number" -> value.isNumber();
+            case "boolean" -> value.isBoolean();
+            case "null" -> value.isNull();
+            default -> true;
+        };
     }
 }
