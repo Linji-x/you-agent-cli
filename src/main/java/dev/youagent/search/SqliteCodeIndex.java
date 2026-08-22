@@ -47,6 +47,7 @@ public final class SqliteCodeIndex implements AutoCloseable {
         try {
             connection.createStatement().executeUpdate("DELETE FROM relations");
             connection.createStatement().executeUpdate("DELETE FROM chunks");
+            connection.createStatement().executeUpdate("DELETE FROM metadata");
             int count = 0;
             for (Path file : files) {
                 String relative = workspace.relativize(file).toString().replace('\\', '/');
@@ -59,6 +60,11 @@ public final class SqliteCodeIndex implements AutoCloseable {
                 for (CodeRelation relation : analysis.relations()) {
                     insertRelation(relation);
                 }
+            }
+            try (PreparedStatement metadata = connection.prepareStatement(
+                    "INSERT INTO metadata(key,value) VALUES('embedding_model',?)")) {
+                metadata.setString(1, embeddingModel.id());
+                metadata.executeUpdate();
             }
             connection.commit();
             return count;
@@ -96,6 +102,65 @@ public final class SqliteCodeIndex implements AutoCloseable {
                         .thenComparing(hit -> hit.chunk().symbol()))
                 .limit(Math.max(1, limit))
                 .toList();
+    }
+
+    public synchronized List<SearchHit> findSymbol(String symbol, int limit) throws SQLException, IOException {
+        String needle = symbol == null ? "" : symbol.strip().toLowerCase(Locale.ROOT);
+        List<SearchHit> hits = new ArrayList<>();
+        try (PreparedStatement statement = connection.prepareStatement("""
+                SELECT id,path,symbol,type,start_line,end_line,content,embedding
+                FROM chunks WHERE lower(symbol) LIKE ? ORDER BY symbol,path,start_line
+                """)) {
+            statement.setString(1, "%" + needle + "%");
+            try (ResultSet rows = statement.executeQuery()) {
+                while (rows.next()) {
+                    CodeChunk chunk = readChunk(rows);
+                    double exact = chunk.symbol().equalsIgnoreCase(symbol) ? 1.0 : 0.8;
+                    hits.add(new SearchHit(chunk, exact, exact, 0));
+                }
+            }
+        }
+        return hits.stream().limit(Math.max(1, limit)).toList();
+    }
+
+    public synchronized List<CodeRelationHit> relationHitsFor(String symbol, int limit) throws SQLException {
+        String sql = """
+                SELECT c.path,c.symbol,c.start_line,r.source_id,r.target_symbol,r.target_id,r.type
+                FROM relations r JOIN chunks c ON c.id=r.source_id
+                WHERE lower(c.symbol) LIKE ? OR lower(r.target_symbol) LIKE ?
+                ORDER BY c.path,c.start_line,r.type,r.target_symbol
+                LIMIT ?
+                """;
+        List<CodeRelationHit> hits = new ArrayList<>();
+        try (PreparedStatement statement = connection.prepareStatement(sql)) {
+            String pattern = "%" + symbol.toLowerCase(Locale.ROOT) + "%";
+            statement.setString(1, pattern);
+            statement.setString(2, pattern);
+            statement.setInt(3, Math.max(1, limit));
+            try (ResultSet rows = statement.executeQuery()) {
+                while (rows.next()) {
+                    CodeRelation relation = new CodeRelation(rows.getString(4), rows.getString(5), rows.getString(6),
+                            CodeRelation.RelationType.valueOf(rows.getString(7)));
+                    hits.add(new CodeRelationHit(rows.getString(1), rows.getString(2), rows.getInt(3), relation));
+                }
+            }
+        }
+        return hits;
+    }
+
+    public synchronized boolean hasChunks() throws SQLException {
+        try (var statement = connection.createStatement();
+             ResultSet row = statement.executeQuery("SELECT EXISTS(SELECT 1 FROM chunks LIMIT 1)")) {
+            return row.next() && row.getInt(1) == 1;
+        }
+    }
+
+    public synchronized boolean usesCurrentEmbedding() throws SQLException {
+        try (PreparedStatement statement = connection.prepareStatement(
+                "SELECT value FROM metadata WHERE key='embedding_model'");
+             ResultSet row = statement.executeQuery()) {
+            return row.next() && embeddingModel.id().equals(row.getString(1));
+        }
     }
 
     public synchronized List<CodeRelation> relationsFor(String symbol) throws SQLException {
@@ -147,6 +212,12 @@ public final class SqliteCodeIndex implements AutoCloseable {
                 """);
         connection.createStatement().executeUpdate("CREATE INDEX IF NOT EXISTS idx_chunks_symbol ON chunks(symbol)");
         connection.createStatement().executeUpdate("CREATE INDEX IF NOT EXISTS idx_rel_source ON relations(source_id)");
+        connection.createStatement().executeUpdate("""
+                CREATE TABLE IF NOT EXISTS metadata(
+                  key TEXT PRIMARY KEY,
+                  value TEXT NOT NULL
+                )
+                """);
     }
 
     private void insertChunk(CodeChunk chunk) throws SQLException, IOException {

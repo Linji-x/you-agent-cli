@@ -4,6 +4,10 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import dev.youagent.llm.ToolCall;
 import dev.youagent.llm.ToolDefinition;
+import dev.youagent.search.CodeIndexService;
+import dev.youagent.search.CodeSearchTools;
+import dev.youagent.search.EmbeddingModel;
+import dev.youagent.search.FeatureHashEmbeddingModel;
 
 import java.time.Duration;
 import java.nio.file.Path;
@@ -14,8 +18,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-public final class ToolRegistry {
+public final class ToolRegistry implements AutoCloseable {
     private final Map<String, Tool> tools = new LinkedHashMap<>();
+    private final List<AutoCloseable> resources = new ArrayList<>();
     private final ToolContext context;
 
     public ToolRegistry(ToolContext context) {
@@ -23,6 +28,13 @@ public final class ToolRegistry {
     }
 
     public static ToolRegistry standard(Path workspace, Duration commandTimeout) {
+        Path root = workspace.toAbsolutePath().normalize();
+        return standard(root, commandTimeout, root.resolve(".you-agent/code-index.db"),
+                new FeatureHashEmbeddingModel(256));
+    }
+
+    public static ToolRegistry standard(Path workspace, Duration commandTimeout,
+                                        Path indexFile, EmbeddingModel embeddingModel) {
         ToolRegistry registry = new ToolRegistry(new ToolContext(workspace, commandTimeout));
         registry.register(new ReadFileTool());
         registry.register(new WriteFileTool());
@@ -30,6 +42,7 @@ public final class ToolRegistry {
         registry.register(new GlobFilesTool());
         registry.register(new GrepCodeTool());
         registry.register(new ExecuteCommandTool());
+        CodeSearchTools.register(registry, new CodeIndexService(workspace, indexFile, embeddingModel));
         return registry;
     }
 
@@ -50,6 +63,28 @@ public final class ToolRegistry {
 
     public synchronized Set<String> names() {
         return Collections.unmodifiableSet(tools.keySet());
+    }
+
+    public synchronized void registerResource(AutoCloseable resource) {
+        resources.add(resource);
+    }
+
+    @Override
+    public synchronized void close() throws Exception {
+        Exception first = null;
+        for (int i = resources.size() - 1; i >= 0; i--) {
+            try {
+                resources.get(i).close();
+            } catch (Exception failure) {
+                if (first == null) {
+                    first = failure;
+                }
+            }
+        }
+        resources.clear();
+        if (first != null) {
+            throw first;
+        }
     }
 
     public ToolExecution execute(ToolCall call) {

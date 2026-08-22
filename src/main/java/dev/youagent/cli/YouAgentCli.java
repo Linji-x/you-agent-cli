@@ -6,6 +6,7 @@ import dev.youagent.agent.ReActAgent;
 import dev.youagent.benchmark.BenchmarkReport;
 import dev.youagent.benchmark.BenchmarkRunner;
 import dev.youagent.config.AppConfig;
+import dev.youagent.config.EmbeddingConfig;
 import dev.youagent.demo.DemoRunner;
 import dev.youagent.llm.OpenAiCompatibleClient;
 import dev.youagent.memory.ContextCompactor;
@@ -15,7 +16,7 @@ import dev.youagent.memory.MemoryFact;
 import dev.youagent.mcp.McpManager;
 import dev.youagent.plan.PlanExecuteAgent;
 import dev.youagent.plan.PlanRunResult;
-import dev.youagent.search.HashEmbeddingModel;
+import dev.youagent.search.EmbeddingModels;
 import dev.youagent.search.SearchHit;
 import dev.youagent.search.SqliteCodeIndex;
 import dev.youagent.tool.ToolRegistry;
@@ -32,6 +33,7 @@ public final class YouAgentCli {
     private static final String SYSTEM_PROMPT = """
             You are You Agent CLI, a workspace-scoped coding agent.
             Inspect evidence before editing. Use registered tools for file or command operations.
+            Use search_code, find_symbol, and find_relations when indexed code evidence can locate an implementation.
             Never invent tool results. If a tool fails, change the approach instead of repeating it.
             Finish with a concise result and verification evidence.
             """;
@@ -142,9 +144,9 @@ public final class YouAgentCli {
             System.err.println("Provider is not configured. Copy .env.example to .env.");
             return 2;
         }
-        ToolRegistry tools = ToolRegistry.standard(workspace, config.commandTimeout());
         PlanRunResult result;
-        try (McpManager mcp = new McpManager(workspace, tools)) {
+        try (ToolRegistry tools = tools(config, workspace);
+             McpManager mcp = new McpManager(workspace, tools)) {
             mcp.start();
             result = new PlanExecuteAgent(new OpenAiCompatibleClient(config), tools,
                     config.maxRounds()).run(task);
@@ -166,13 +168,13 @@ public final class YouAgentCli {
         return report.passed() == report.total() ? 0 : 1;
     }
 
-    private static int runAgent(AppConfig config, Path workspace, String task) throws IOException {
-        ToolRegistry tools = ToolRegistry.standard(workspace, config.commandTimeout());
+    private static int runAgent(AppConfig config, Path workspace, String task) throws Exception {
         OpenAiCompatibleClient client = new OpenAiCompatibleClient(config);
         ContextCompactor compactor = new ContextCompactor(config.contextBudgetTokens(),
                 config.compressionTriggerPercent(), 2, 8_000, new LlmContextSummarizer(client));
         AgentResult result;
-        try (McpManager mcp = new McpManager(workspace, tools)) {
+        try (ToolRegistry tools = tools(config, workspace);
+             McpManager mcp = new McpManager(workspace, tools)) {
             mcp.start();
             ReActAgent agent = new ReActAgent(client, tools, config.maxRounds(),
                     SYSTEM_PROMPT + relevantMemory(config, workspace, task), () -> false, compactor);
@@ -189,8 +191,8 @@ public final class YouAgentCli {
 
     private static int mcpStatus(Path workspace) throws Exception {
         AppConfig config = AppConfig.load(workspace);
-        ToolRegistry tools = ToolRegistry.standard(workspace, config.commandTimeout());
-        try (McpManager manager = new McpManager(workspace, tools)) {
+        try (ToolRegistry tools = tools(config, workspace);
+             McpManager manager = new McpManager(workspace, tools)) {
             manager.start();
             if (manager.statuses().isEmpty()) {
                 System.out.println("No MCP servers configured at " + manager.configFile());
@@ -244,7 +246,8 @@ public final class YouAgentCli {
 
     private static int rebuildIndex(Path workspace) throws Exception {
         AppConfig config = AppConfig.load(workspace);
-        try (SqliteCodeIndex index = new SqliteCodeIndex(workspace, config.indexFile(), new HashEmbeddingModel(256))) {
+        try (SqliteCodeIndex index = new SqliteCodeIndex(workspace, config.indexFile(),
+                EmbeddingModels.from(EmbeddingConfig.load(workspace)))) {
             int chunks = index.rebuild();
             System.out.println("Indexed " + chunks + " Java chunks into " + config.indexFile());
         }
@@ -257,7 +260,8 @@ public final class YouAgentCli {
             return 2;
         }
         AppConfig config = AppConfig.load(workspace);
-        try (SqliteCodeIndex index = new SqliteCodeIndex(workspace, config.indexFile(), new HashEmbeddingModel(256))) {
+        try (SqliteCodeIndex index = new SqliteCodeIndex(workspace, config.indexFile(),
+                EmbeddingModels.from(EmbeddingConfig.load(workspace)))) {
             for (SearchHit hit : index.search(query, 10)) {
                 System.out.printf("%.3f %s:%d %s [%s]%n", hit.score(), hit.chunk().path(),
                         hit.chunk().startLine(), hit.chunk().symbol(), hit.chunk().type());
@@ -268,6 +272,11 @@ public final class YouAgentCli {
 
     private static String joinTail(String[] args) {
         return String.join(" ", Arrays.copyOfRange(args, 1, args.length)).strip();
+    }
+
+    private static ToolRegistry tools(AppConfig config, Path workspace) throws IOException {
+        return ToolRegistry.standard(workspace, config.commandTimeout(), config.indexFile(),
+                EmbeddingModels.from(EmbeddingConfig.load(workspace)));
     }
 
     private static String oneLine(String value) {
