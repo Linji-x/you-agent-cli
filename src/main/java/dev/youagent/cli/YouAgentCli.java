@@ -12,6 +12,7 @@ import dev.youagent.memory.ContextCompactor;
 import dev.youagent.memory.LlmContextSummarizer;
 import dev.youagent.memory.LongTermMemory;
 import dev.youagent.memory.MemoryFact;
+import dev.youagent.mcp.McpManager;
 import dev.youagent.plan.PlanExecuteAgent;
 import dev.youagent.plan.PlanRunResult;
 import dev.youagent.search.HashEmbeddingModel;
@@ -71,6 +72,7 @@ public final class YouAgentCli {
             case "--search" -> search(workspace, joinTail(args));
             case "--save" -> saveMemory(workspace, joinTail(args));
             case "--memory" -> listMemory(workspace);
+            case "--mcp-status" -> mcpStatus(workspace);
             default -> {
                 System.err.println("Unknown option: " + args[0]);
                 printHelp();
@@ -141,8 +143,12 @@ public final class YouAgentCli {
             return 2;
         }
         ToolRegistry tools = ToolRegistry.standard(workspace, config.commandTimeout());
-        PlanRunResult result = new PlanExecuteAgent(new OpenAiCompatibleClient(config), tools,
-                config.maxRounds()).run(task);
+        PlanRunResult result;
+        try (McpManager mcp = new McpManager(workspace, tools)) {
+            mcp.start();
+            result = new PlanExecuteAgent(new OpenAiCompatibleClient(config), tools,
+                    config.maxRounds()).run(task);
+        }
         System.out.println("PLAN");
         result.tasks().forEach(planTask -> System.out.println("  " + planTask.id() + " <- "
                 + planTask.dependsOn() + " : " + planTask.description()));
@@ -160,14 +166,18 @@ public final class YouAgentCli {
         return report.passed() == report.total() ? 0 : 1;
     }
 
-    private static int runAgent(AppConfig config, Path workspace, String task) {
+    private static int runAgent(AppConfig config, Path workspace, String task) throws IOException {
         ToolRegistry tools = ToolRegistry.standard(workspace, config.commandTimeout());
         OpenAiCompatibleClient client = new OpenAiCompatibleClient(config);
         ContextCompactor compactor = new ContextCompactor(config.contextBudgetTokens(),
                 config.compressionTriggerPercent(), 2, 8_000, new LlmContextSummarizer(client));
-        ReActAgent agent = new ReActAgent(client, tools, config.maxRounds(),
-                SYSTEM_PROMPT + relevantMemory(config, workspace, task), () -> false, compactor);
-        AgentResult result = agent.run(task);
+        AgentResult result;
+        try (McpManager mcp = new McpManager(workspace, tools)) {
+            mcp.start();
+            ReActAgent agent = new ReActAgent(client, tools, config.maxRounds(),
+                    SYSTEM_PROMPT + relevantMemory(config, workspace, task), () -> false, compactor);
+            result = agent.run(task);
+        }
         for (AgentEvent event : result.events()) {
             if (event.type() == AgentEvent.Type.TOOL_CALL || event.type() == AgentEvent.Type.TOOL_RESULT) {
                 System.out.printf("[%s] %s %s%n", event.type(), event.name(), oneLine(event.detail()));
@@ -175,6 +185,21 @@ public final class YouAgentCli {
         }
         System.out.println(result.answer());
         return result.completed() ? 0 : 1;
+    }
+
+    private static int mcpStatus(Path workspace) throws Exception {
+        AppConfig config = AppConfig.load(workspace);
+        ToolRegistry tools = ToolRegistry.standard(workspace, config.commandTimeout());
+        try (McpManager manager = new McpManager(workspace, tools)) {
+            manager.start();
+            if (manager.statuses().isEmpty()) {
+                System.out.println("No MCP servers configured at " + manager.configFile());
+            } else {
+                manager.statuses().forEach(status -> System.out.printf("%s %s tools=%d %s%n",
+                        status.name(), status.lifecycle(), status.toolCount(), status.detail()));
+            }
+        }
+        return 0;
     }
 
     private static int saveMemory(Path workspace, String fact) throws Exception {
@@ -272,6 +297,7 @@ public final class YouAgentCli {
                   --search <query>       query the hybrid code index
                   --save <fact>          explicitly persist a project-scoped fact
                   --memory               list project-visible long-term memory
+                  --mcp-status           initialize configured MCP servers and show status
                   --help                 show this help
                 """);
     }

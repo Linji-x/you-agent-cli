@@ -1,0 +1,22 @@
+{
+  "servers": {
+    "local-example": {
+      "enabled": false,
+      "transport": "stdio",
+      "command": ["replace-with-server-command", "--stdio"],
+      "env": {
+        "EXAMPLE_TOKEN": "${EXAMPLE_MCP_TOKEN}"
+      },
+      "timeoutSeconds": 15
+    },
+    "remote-example": {
+      "enabled": false,
+      "transport": "streamable-http",
+      "url": "https://mcp.example.com/mcp",
+      "headers": {
+        "Authorization": "Bearer ${EXAMPLE_MCP_TOKEN}"
+      },
+      "timeoutSeconds": 15
+    }
+  }
+}

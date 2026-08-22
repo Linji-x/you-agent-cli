@@ -9,10 +9,12 @@ import java.io.IOException;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicLong;
 
 public final class McpClient implements AutoCloseable {
     public static final String PROTOCOL_VERSION = "2025-03-26";
+    public static final Set<String> SUPPORTED_PROTOCOL_VERSIONS = Set.of(PROTOCOL_VERSION);
     private final String serverName;
     private final McpTransport transport;
     private final ObjectMapper mapper = new ObjectMapper();
@@ -45,8 +47,9 @@ public final class McpClient implements AutoCloseable {
             JsonNode response = request("initialize", params, remaining(deadline));
             JsonNode result = result(response);
             negotiatedProtocol = result.path("protocolVersion").asText();
-            if (negotiatedProtocol.isBlank()) {
-                throw new IOException("MCP initialize response omitted protocolVersion");
+            if (!SUPPORTED_PROTOCOL_VERSIONS.contains(negotiatedProtocol)) {
+                throw new IOException("Unsupported MCP protocol version: "
+                        + (negotiatedProtocol.isBlank() ? "<missing>" : negotiatedProtocol));
             }
             ObjectNode initialized = notification("notifications/initialized", mapper.createObjectNode());
             transport.notify(initialized);
