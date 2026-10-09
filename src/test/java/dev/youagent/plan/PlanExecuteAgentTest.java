@@ -15,6 +15,7 @@ import java.util.ArrayDeque;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Queue;
+import java.util.ArrayList;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -56,12 +57,38 @@ class PlanExecuteAgentTest {
         assertThrows(IllegalArgumentException.class, () -> agent.run("bad plan"));
     }
 
+    @Test
+    void injectsUpstreamOutputIntoDownstreamWorkerContext(@TempDir Path workspace) throws Exception {
+        QueueClient client = new QueueClient(
+                new LlmResponse("""
+                        {"tasks":[
+                          {"id":"discover","description":"discover","dependsOn":[],"parallelSafe":false},
+                          {"id":"use","description":"use evidence","dependsOn":["discover"],"parallelSafe":false}
+                        ]}
+                        """, List.of(), LlmResponse.FinishReason.STOP),
+                new LlmResponse("UPSTREAM_EVIDENCE", List.of(), LlmResponse.FinishReason.STOP),
+                new LlmResponse("used it", List.of(), LlmResponse.FinishReason.STOP)
+        );
+
+        PlanRunResult result = new PlanExecuteAgent(client,
+                ToolRegistry.standard(workspace, Duration.ofSeconds(1)), 2, 4).run("discover then use");
+
+        assertTrue(result.report().succeeded());
+        String downstreamAssignment = client.requests.get(2).stream()
+                .filter(message -> message.role().equals("user"))
+                .findFirst().orElseThrow().content();
+        assertTrue(downstreamAssignment.contains("discover: UPSTREAM_EVIDENCE"));
+        assertEquals(false, result.tasks().get(0).parallelSafe());
+    }
+
     private static final class QueueClient implements LlmClient {
         private final Queue<LlmResponse> responses;
+        private final List<List<ChatMessage>> requests = new ArrayList<>();
         private QueueClient(LlmResponse... responses) {
             this.responses = new ArrayDeque<>(Arrays.asList(responses));
         }
         @Override public LlmResponse complete(List<ChatMessage> messages, List<ToolDefinition> tools) throws IOException {
+            requests.add(List.copyOf(messages));
             return responses.remove();
         }
     }

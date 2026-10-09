@@ -6,15 +6,21 @@ import dev.youagent.agent.ReActAgent;
 import dev.youagent.benchmark.BenchmarkReport;
 import dev.youagent.benchmark.BenchmarkRunner;
 import dev.youagent.config.AppConfig;
+import dev.youagent.config.EmbeddingConfig;
 import dev.youagent.demo.DemoRunner;
+import dev.youagent.eval.OnlineAgentEvalRunner;
+import dev.youagent.eval.OnlineEvaluationReport;
+import dev.youagent.eval.RetrievalEvaluationReport;
+import dev.youagent.eval.RetrievalEvaluationRunner;
 import dev.youagent.llm.OpenAiCompatibleClient;
 import dev.youagent.memory.ContextCompactor;
 import dev.youagent.memory.LlmContextSummarizer;
 import dev.youagent.memory.LongTermMemory;
 import dev.youagent.memory.MemoryFact;
+import dev.youagent.mcp.McpManager;
 import dev.youagent.plan.PlanExecuteAgent;
 import dev.youagent.plan.PlanRunResult;
-import dev.youagent.search.HashEmbeddingModel;
+import dev.youagent.search.EmbeddingModels;
 import dev.youagent.search.SearchHit;
 import dev.youagent.search.SqliteCodeIndex;
 import dev.youagent.tool.ToolRegistry;
@@ -31,6 +37,7 @@ public final class YouAgentCli {
     private static final String SYSTEM_PROMPT = """
             You are You Agent CLI, a workspace-scoped coding agent.
             Inspect evidence before editing. Use registered tools for file or command operations.
+            Use search_code, find_symbol, and find_relations when indexed code evidence can locate an implementation.
             Never invent tool results. If a tool fails, change the approach instead of repeating it.
             Finish with a concise result and verification evidence.
             """;
@@ -65,12 +72,15 @@ public final class YouAgentCli {
                 yield 0;
             }
             case "--benchmark" -> runBenchmark(workspace);
+            case "--retrieval-eval" -> runRetrievalEvaluation(workspace);
+            case "--eval" -> runOnlineEvaluation(workspace);
             case "--once" -> runOnce(workspace, joinTail(args));
             case "--plan" -> runPlan(workspace, joinTail(args));
             case "--index" -> rebuildIndex(workspace);
             case "--search" -> search(workspace, joinTail(args));
             case "--save" -> saveMemory(workspace, joinTail(args));
             case "--memory" -> listMemory(workspace);
+            case "--mcp-status" -> mcpStatus(workspace);
             default -> {
                 System.err.println("Unknown option: " + args[0]);
                 printHelp();
@@ -81,7 +91,7 @@ public final class YouAgentCli {
 
     private static int repl(Path workspace) throws Exception {
         AppConfig config = AppConfig.load(workspace);
-        System.out.println("You Agent CLI 0.1.0 | Java 17 | workspace=" + workspace.toAbsolutePath().normalize());
+        System.out.println("You Agent CLI 0.2.0-SNAPSHOT | Java 17 | workspace=" + workspace.toAbsolutePath().normalize());
         System.out.println("Type /help or /exit.");
         BufferedReader input = new BufferedReader(new InputStreamReader(System.in, StandardCharsets.UTF_8));
         while (true) {
@@ -140,9 +150,13 @@ public final class YouAgentCli {
             System.err.println("Provider is not configured. Copy .env.example to .env.");
             return 2;
         }
-        ToolRegistry tools = ToolRegistry.standard(workspace, config.commandTimeout());
-        PlanRunResult result = new PlanExecuteAgent(new OpenAiCompatibleClient(config), tools,
-                config.maxRounds()).run(task);
+        PlanRunResult result;
+        try (ToolRegistry tools = tools(config, workspace);
+             McpManager mcp = new McpManager(workspace, tools)) {
+            mcp.start();
+            result = new PlanExecuteAgent(new OpenAiCompatibleClient(config), tools,
+                    config.maxRounds(), config.planMaxParallelism()).run(task);
+        }
         System.out.println("PLAN");
         result.tasks().forEach(planTask -> System.out.println("  " + planTask.id() + " <- "
                 + planTask.dependsOn() + " : " + planTask.description()));
@@ -155,19 +169,49 @@ public final class YouAgentCli {
 
     private static int runBenchmark(Path workspace) throws Exception {
         BenchmarkReport report = new BenchmarkRunner().run(workspace.toAbsolutePath().normalize());
-        System.out.println("Benchmark: " + report.passed() + "/" + report.total() + " passed");
+        System.out.println("Deterministic offline conformance benchmark: "
+                + report.passed() + "/" + report.total() + " passed");
         System.out.println("Report: benchmarks/results/latest.md");
         return report.passed() == report.total() ? 0 : 1;
     }
 
-    private static int runAgent(AppConfig config, Path workspace, String task) {
-        ToolRegistry tools = ToolRegistry.standard(workspace, config.commandTimeout());
+    private static int runRetrievalEvaluation(Path workspace) throws Exception {
+        RetrievalEvaluationReport report = new RetrievalEvaluationRunner().run(
+                workspace.toAbsolutePath().normalize(), EmbeddingConfig.load(workspace));
+        for (var configuration : report.configurations()) {
+            System.out.printf("%s Recall@5=%.3f MRR@10=%.3f latency=%.3fms%n", configuration.name(),
+                    configuration.recallAt5(), configuration.mrrAt10(), configuration.averageLatencyMs());
+        }
+        System.out.println("Report: eval/results/retrieval-latest.md");
+        return 0;
+    }
+
+    private static int runOnlineEvaluation(Path workspace) throws Exception {
+        AppConfig config = AppConfig.load(workspace);
+        if (!config.hasProviderCredentials()) {
+            System.err.println("--eval requires explicit YOU_AGENT_API_KEY, YOU_AGENT_BASE_URL, and YOU_AGENT_MODEL");
+            return 2;
+        }
+        OnlineEvaluationReport report = new OnlineAgentEvalRunner().run(
+                workspace.toAbsolutePath().normalize(), config);
+        System.out.printf("Online evaluation: %d/%d passed (%.1f%%)%n", report.passed(), report.total(),
+                report.completionRate() * 100);
+        System.out.println("Report: eval/results/online-latest.md");
+        return report.passed() == report.total() ? 0 : 1;
+    }
+
+    private static int runAgent(AppConfig config, Path workspace, String task) throws Exception {
         OpenAiCompatibleClient client = new OpenAiCompatibleClient(config);
         ContextCompactor compactor = new ContextCompactor(config.contextBudgetTokens(),
                 config.compressionTriggerPercent(), 2, 8_000, new LlmContextSummarizer(client));
-        ReActAgent agent = new ReActAgent(client, tools, config.maxRounds(),
-                SYSTEM_PROMPT + relevantMemory(config, workspace, task), () -> false, compactor);
-        AgentResult result = agent.run(task);
+        AgentResult result;
+        try (ToolRegistry tools = tools(config, workspace);
+             McpManager mcp = new McpManager(workspace, tools)) {
+            mcp.start();
+            ReActAgent agent = new ReActAgent(client, tools, config.maxRounds(),
+                    SYSTEM_PROMPT + relevantMemory(config, workspace, task), () -> false, compactor);
+            result = agent.run(task);
+        }
         for (AgentEvent event : result.events()) {
             if (event.type() == AgentEvent.Type.TOOL_CALL || event.type() == AgentEvent.Type.TOOL_RESULT) {
                 System.out.printf("[%s] %s %s%n", event.type(), event.name(), oneLine(event.detail()));
@@ -175,6 +219,21 @@ public final class YouAgentCli {
         }
         System.out.println(result.answer());
         return result.completed() ? 0 : 1;
+    }
+
+    private static int mcpStatus(Path workspace) throws Exception {
+        AppConfig config = AppConfig.load(workspace);
+        try (ToolRegistry tools = tools(config, workspace);
+             McpManager manager = new McpManager(workspace, tools)) {
+            manager.start();
+            if (manager.statuses().isEmpty()) {
+                System.out.println("No MCP servers configured at " + manager.configFile());
+            } else {
+                manager.statuses().forEach(status -> System.out.printf("%s %s tools=%d %s%n",
+                        status.name(), status.lifecycle(), status.toolCount(), status.detail()));
+            }
+        }
+        return 0;
     }
 
     private static int saveMemory(Path workspace, String fact) throws Exception {
@@ -219,7 +278,8 @@ public final class YouAgentCli {
 
     private static int rebuildIndex(Path workspace) throws Exception {
         AppConfig config = AppConfig.load(workspace);
-        try (SqliteCodeIndex index = new SqliteCodeIndex(workspace, config.indexFile(), new HashEmbeddingModel(256))) {
+        try (SqliteCodeIndex index = new SqliteCodeIndex(workspace, config.indexFile(),
+                EmbeddingModels.from(EmbeddingConfig.load(workspace)))) {
             int chunks = index.rebuild();
             System.out.println("Indexed " + chunks + " Java chunks into " + config.indexFile());
         }
@@ -232,7 +292,8 @@ public final class YouAgentCli {
             return 2;
         }
         AppConfig config = AppConfig.load(workspace);
-        try (SqliteCodeIndex index = new SqliteCodeIndex(workspace, config.indexFile(), new HashEmbeddingModel(256))) {
+        try (SqliteCodeIndex index = new SqliteCodeIndex(workspace, config.indexFile(),
+                EmbeddingModels.from(EmbeddingConfig.load(workspace)))) {
             for (SearchHit hit : index.search(query, 10)) {
                 System.out.printf("%.3f %s:%d %s [%s]%n", hit.score(), hit.chunk().path(),
                         hit.chunk().startLine(), hit.chunk().symbol(), hit.chunk().type());
@@ -243,6 +304,11 @@ public final class YouAgentCli {
 
     private static String joinTail(String[] args) {
         return String.join(" ", Arrays.copyOfRange(args, 1, args.length)).strip();
+    }
+
+    private static ToolRegistry tools(AppConfig config, Path workspace) throws IOException {
+        return ToolRegistry.standard(workspace, config.commandTimeout(), config.indexFile(),
+                EmbeddingModels.from(EmbeddingConfig.load(workspace)));
     }
 
     private static String oneLine(String value) {
@@ -265,13 +331,16 @@ public final class YouAgentCli {
 
                 Commands:
                   --demo                 offline input -> plan -> tools -> result demo
-                  --benchmark            run 25 fixed offline experiments and write reports
+                  --benchmark            run the 25-task deterministic offline conformance benchmark
+                  --retrieval-eval       run the labeled code-retrieval evaluation
+                  --eval                 run real model-backed agent tasks (credentials required)
                   --once <task>          run one ReAct task with configured provider
                   --plan <task>          generate a DAG and execute its nodes with ReAct
                   --index                rebuild the local Java AST/SQLite index
                   --search <query>       query the hybrid code index
                   --save <fact>          explicitly persist a project-scoped fact
                   --memory               list project-visible long-term memory
+                  --mcp-status           initialize configured MCP servers and show status
                   --help                 show this help
                 """);
     }

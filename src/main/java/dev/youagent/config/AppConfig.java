@@ -14,6 +14,7 @@ public record AppConfig(
         Duration commandTimeout,
         int contextBudgetTokens,
         int compressionTriggerPercent,
+        int planMaxParallelism,
         Path memoryFile,
         Path indexFile
 ) {
@@ -28,6 +29,7 @@ public record AppConfig(
                 Duration.ofSeconds(positiveInt("YOU_AGENT_COMMAND_TIMEOUT_SECONDS", file, 30)),
                 positiveInt("YOU_AGENT_CONTEXT_BUDGET_TOKENS", file, 32_000),
                 boundedPercent("YOU_AGENT_COMPRESSION_TRIGGER_PERCENT", file, 80),
+                boundedInt("YOU_AGENT_PLAN_MAX_PARALLELISM", file, 4, 1, 32),
                 resolveInside(root, value("YOU_AGENT_MEMORY_FILE", file, ".you-agent/memory.jsonl")),
                 resolveInside(root, value("YOU_AGENT_INDEX_FILE", file, ".you-agent/code-index.db"))
         );
@@ -59,6 +61,11 @@ public record AppConfig(
     private static int boundedPercent(String name, Map<String, String> file, int fallback) {
         int parsed = positiveInt(name, file, fallback);
         return parsed >= 20 && parsed <= 95 ? parsed : fallback;
+    }
+
+    private static int boundedInt(String name, Map<String, String> file, int fallback, int minimum, int maximum) {
+        int parsed = positiveInt(name, file, fallback);
+        return parsed >= minimum && parsed <= maximum ? parsed : fallback;
     }
 
     private static Path resolveInside(Path root, String configured) {

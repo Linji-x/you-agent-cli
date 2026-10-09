@@ -7,3 +7,5 @@ target/
 *.log
 .you-agent/
 benchmarks/results/*.tmp
+eval/results/online-latest.json
+eval/results/online-latest.md

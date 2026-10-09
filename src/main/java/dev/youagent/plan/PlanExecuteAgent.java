@@ -3,21 +3,28 @@ package dev.youagent.plan;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.youagent.agent.AgentResult;
+import dev.youagent.agent.AgentEvent;
 import dev.youagent.agent.ReActAgent;
 import dev.youagent.llm.ChatMessage;
 import dev.youagent.llm.LlmClient;
 import dev.youagent.llm.LlmResponse;
 import dev.youagent.tool.ToolRegistry;
+import dev.youagent.memory.ContextCompactor;
 
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 public final class PlanExecuteAgent {
     private static final String PLANNER_PROMPT = """
             Decompose the objective into a small directed acyclic graph.
-            Return JSON only: {"tasks":[{"id":"inspect","description":"...","dependsOn":[]}]}
+            Return JSON only: {"tasks":[{"id":"inspect","description":"...","dependsOn":[],
+            "parallelSafe":false,"exclusiveResources":[]}]}
             Use 2-8 tasks. IDs must start with a letter. Dependencies must reference task IDs.
+            parallelSafe defaults to false. Set it true only for independent/read-only work.
+            Every parallel write must name its target path in exclusiveResources; shared resources serialize.
             Keep tasks independently verifiable and never include markdown fences.
             """;
     private static final String WORKER_PROMPT = """
@@ -28,12 +35,18 @@ public final class PlanExecuteAgent {
     private final LlmClient client;
     private final ToolRegistry tools;
     private final int taskMaxRounds;
+    private final int maxParallelism;
     private final ObjectMapper mapper = new ObjectMapper();
 
     public PlanExecuteAgent(LlmClient client, ToolRegistry tools, int taskMaxRounds) {
+        this(client, tools, taskMaxRounds, 1);
+    }
+
+    public PlanExecuteAgent(LlmClient client, ToolRegistry tools, int taskMaxRounds, int maxParallelism) {
         this.client = client;
         this.tools = tools;
         this.taskMaxRounds = taskMaxRounds;
+        this.maxParallelism = maxParallelism;
     }
 
     public PlanRunResult run(String objective) throws IOException {
@@ -46,13 +59,27 @@ public final class PlanExecuteAgent {
         }
         List<PlanTask> tasks = parseTasks(planning.content());
         ExecutionPlan plan = new ExecutionPlan(tasks);
-        ExecutionReport report = new DagExecutor().execute(plan, task -> {
-            String assignment = "Overall objective: " + objective + "\nCurrent node " + task.id() + ": " + task.description();
-            AgentResult result = new ReActAgent(client, tools, taskMaxRounds, WORKER_PROMPT).run(assignment);
+        Map<String, AgentResult> workerResults = new ConcurrentHashMap<>();
+        ExecutionReport report = new DagExecutor(maxParallelism).execute(plan, (task, dependencies) -> {
+            StringBuilder assignment = new StringBuilder("Overall objective: ").append(objective)
+                    .append("\nCurrent node ").append(task.id()).append(": ").append(task.description());
+            if (!dependencies.isEmpty()) {
+                assignment.append("\nDirect dependency outputs (trusted execution evidence):");
+                dependencies.forEach((id, output) -> assignment.append("\n- ").append(id).append(": ").append(output));
+            }
+            AgentResult result = new ReActAgent(client, tools, taskMaxRounds, WORKER_PROMPT)
+                    .run(assignment.toString());
+            workerResults.put(task.id(), result);
             return result.completed() ? TaskOutcome.success(result.answer())
                     : TaskOutcome.failure(result.exitReason() + ": " + result.answer());
         });
-        return new PlanRunResult(tasks, report);
+        List<AgentEvent> events = tasks.stream().filter(task -> workerResults.containsKey(task.id()))
+                .flatMap(task -> workerResults.get(task.id()).events().stream()).toList();
+        int rounds = tasks.stream().filter(task -> workerResults.containsKey(task.id()))
+                .mapToInt(task -> workerResults.get(task.id()).rounds()).sum();
+        int estimatedTokens = tasks.stream().filter(task -> workerResults.containsKey(task.id()))
+                .mapToInt(task -> ContextCompactor.estimateTokens(workerResults.get(task.id()).history())).sum();
+        return new PlanRunResult(tasks, report, events, rounds, estimatedTokens);
     }
 
     public List<PlanTask> parseTasks(String raw) throws IOException {
@@ -71,8 +98,10 @@ public final class PlanExecuteAgent {
         for (JsonNode node : taskNodes) {
             List<String> dependencies = new ArrayList<>();
             node.path("dependsOn").forEach(value -> dependencies.add(value.asText()));
+            List<String> resources = new ArrayList<>();
+            node.path("exclusiveResources").forEach(value -> resources.add(value.asText()));
             tasks.add(new PlanTask(node.path("id").asText(), node.path("description").asText(),
-                    dependencies, "", mapper.createObjectNode()));
+                    dependencies, "", mapper.createObjectNode(), node.path("parallelSafe").asBoolean(false), resources));
         }
         new ExecutionPlan(tasks);
         return tasks;

@@ -27,7 +27,8 @@ public final class BenchmarkRunner {
         Path tasksFile = projectRoot.resolve("benchmarks/tasks.json");
         List<BenchmarkCase> cases = mapper.readValue(tasksFile.toFile(), new TypeReference<>() { });
         if (cases.size() < 20 || cases.size() > 30) {
-            throw new IllegalStateException("benchmark must contain 20-30 fixed tasks, found " + cases.size());
+            throw new IllegalStateException("deterministic offline conformance benchmark must contain 20-30 "
+                    + "fixed tasks, found " + cases.size());
         }
         List<BenchmarkResult> results = new ArrayList<>();
         for (BenchmarkCase benchmark : cases) {
@@ -53,7 +54,7 @@ public final class BenchmarkRunner {
         Path resultsDirectory = projectRoot.resolve("benchmarks/results");
         Files.createDirectories(resultsDirectory);
         mapper.writeValue(resultsDirectory.resolve("latest.json").toFile(), report);
-        StringBuilder markdown = new StringBuilder("# Offline benchmark results\n\n")
+        StringBuilder markdown = new StringBuilder("# Deterministic offline conformance benchmark results\n\n")
                 .append("- Generated: `").append(report.generatedAt()).append("`\n")
                 .append("- Runtime: Java `").append(report.javaVersion()).append("` on `").append(report.os()).append("`\n")
                 .append("- Result: **").append(report.passed()).append('/').append(report.total()).append(" passed**\n\n")

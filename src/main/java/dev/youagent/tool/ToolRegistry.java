@@ -4,6 +4,10 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import dev.youagent.llm.ToolCall;
 import dev.youagent.llm.ToolDefinition;
+import dev.youagent.search.CodeIndexService;
+import dev.youagent.search.CodeSearchTools;
+import dev.youagent.search.EmbeddingModel;
+import dev.youagent.search.FeatureHashEmbeddingModel;
 
 import java.time.Duration;
 import java.nio.file.Path;
@@ -14,8 +18,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-public final class ToolRegistry {
+public final class ToolRegistry implements AutoCloseable {
     private final Map<String, Tool> tools = new LinkedHashMap<>();
+    private final List<AutoCloseable> resources = new ArrayList<>();
     private final ToolContext context;
 
     public ToolRegistry(ToolContext context) {
@@ -23,6 +28,13 @@ public final class ToolRegistry {
     }
 
     public static ToolRegistry standard(Path workspace, Duration commandTimeout) {
+        Path root = workspace.toAbsolutePath().normalize();
+        return standard(root, commandTimeout, root.resolve(".you-agent/code-index.db"),
+                new FeatureHashEmbeddingModel(256));
+    }
+
+    public static ToolRegistry standard(Path workspace, Duration commandTimeout,
+                                        Path indexFile, EmbeddingModel embeddingModel) {
         ToolRegistry registry = new ToolRegistry(new ToolContext(workspace, commandTimeout));
         registry.register(new ReadFileTool());
         registry.register(new WriteFileTool());
@@ -30,6 +42,7 @@ public final class ToolRegistry {
         registry.register(new GlobFilesTool());
         registry.register(new GrepCodeTool());
         registry.register(new ExecuteCommandTool());
+        CodeSearchTools.register(registry, new CodeIndexService(workspace, indexFile, embeddingModel));
         return registry;
     }
 
@@ -50,6 +63,28 @@ public final class ToolRegistry {
 
     public synchronized Set<String> names() {
         return Collections.unmodifiableSet(tools.keySet());
+    }
+
+    public synchronized void registerResource(AutoCloseable resource) {
+        resources.add(resource);
+    }
+
+    @Override
+    public synchronized void close() throws Exception {
+        Exception first = null;
+        for (int i = resources.size() - 1; i >= 0; i--) {
+            try {
+                resources.get(i).close();
+            } catch (Exception failure) {
+                if (first == null) {
+                    first = failure;
+                }
+            }
+        }
+        resources.clear();
+        if (first != null) {
+            throw first;
+        }
     }
 
     public ToolExecution execute(ToolCall call) {
@@ -77,39 +112,88 @@ public final class ToolRegistry {
     }
 
     private String validate(JsonNode arguments, ObjectNode schema) {
-        if (arguments == null || !arguments.isObject()) {
-            return "arguments must be a JSON object";
+        if (arguments == null) {
+            return "$ must not be null";
         }
-        List<String> missing = new ArrayList<>();
-        for (JsonNode required : schema.path("required")) {
-            String name = required.asText();
-            if (!arguments.has(name) || arguments.path(name).isNull()) {
-                missing.add(name);
+        return validateNode(arguments, schema, "$");
+    }
+
+    private String validateNode(JsonNode value, JsonNode schema, String path) {
+        String type = schema.path("type").asText("");
+        if (!type.isBlank() && !matchesType(value, type)) {
+            return path + " must be " + type;
+        }
+        if (schema.path("enum").isArray()) {
+            boolean matched = false;
+            for (JsonNode allowed : schema.path("enum")) {
+                if (allowed.equals(value)) {
+                    matched = true;
+                    break;
+                }
+            }
+            if (!matched) {
+                return path + " must match one of the allowed enum values";
             }
         }
-        if (!missing.isEmpty()) {
-            return "missing required fields: " + String.join(", ", missing);
-        }
-        JsonNode properties = schema.path("properties");
-        var fields = arguments.fields();
-        while (fields.hasNext()) {
-            var field = fields.next();
-            JsonNode expected = properties.path(field.getKey());
-            if (expected.isMissingNode()) {
-                return "unknown field: " + field.getKey();
+        if (value.isObject() && (type.equals("object") || schema.has("properties") || schema.has("required"))) {
+            List<String> missing = new ArrayList<>();
+            for (JsonNode required : schema.path("required")) {
+                String name = required.asText();
+                if (!value.has(name) || value.path(name).isNull()) {
+                    missing.add(name);
+                }
             }
-            String type = expected.path("type").asText();
-            boolean valid = switch (type) {
-                case "string" -> field.getValue().isTextual();
-                case "integer" -> field.getValue().isIntegralNumber();
-                case "array" -> field.getValue().isArray();
-                case "boolean" -> field.getValue().isBoolean();
-                default -> true;
-            };
-            if (!valid) {
-                return "field '" + field.getKey() + "' must be " + type;
+            if (!missing.isEmpty()) {
+                return path + " missing required fields: " + String.join(", ", missing);
+            }
+            JsonNode properties = schema.path("properties");
+            var fields = value.fields();
+            while (fields.hasNext()) {
+                var field = fields.next();
+                JsonNode expected = properties.path(field.getKey());
+                String childPath = path + "." + field.getKey();
+                if (expected.isMissingNode()) {
+                    JsonNode additional = schema.path("additionalProperties");
+                    if (additional.isBoolean() && !additional.asBoolean()) {
+                        return childPath + " is not allowed";
+                    }
+                    if (additional.isObject()) {
+                        String nested = validateNode(field.getValue(), additional, childPath);
+                        if (nested != null) {
+                            return nested;
+                        }
+                    }
+                    continue;
+                }
+                String nested = validateNode(field.getValue(), expected, childPath);
+                if (nested != null) {
+                    return nested;
+                }
+            }
+        }
+        if (value.isArray() && schema.path("items").isObject()) {
+            int index = 0;
+            for (JsonNode item : value) {
+                String nested = validateNode(item, schema.path("items"), path + "[" + index + "]");
+                if (nested != null) {
+                    return nested;
+                }
+                index++;
             }
         }
         return null;
+    }
+
+    private static boolean matchesType(JsonNode value, String type) {
+        return switch (type) {
+            case "object" -> value.isObject();
+            case "array" -> value.isArray();
+            case "string" -> value.isTextual();
+            case "integer" -> value.isIntegralNumber();
+            case "number" -> value.isNumber();
+            case "boolean" -> value.isBoolean();
+            case "null" -> value.isNull();
+            default -> true;
+        };
     }
 }

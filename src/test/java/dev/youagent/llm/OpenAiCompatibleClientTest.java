@@ -27,7 +27,7 @@ class OpenAiCompatibleClientTest {
 
                             """));
             AppConfig config = new AppConfig(server.url("/v1").uri(), "test-key", "test-model", 3,
-                    Duration.ofSeconds(1), 1_000, 80,
+                    Duration.ofSeconds(1), 1_000, 80, 4,
                     workspace.resolve("memory.jsonl"), workspace.resolve("index.db"));
             OpenAiCompatibleClient client = new OpenAiCompatibleClient(config, new ObjectMapper(), new OkHttpClient());
 

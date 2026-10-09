@@ -26,7 +26,7 @@ import dev.youagent.plan.TaskOutcome;
 import dev.youagent.plan.TaskStatus;
 import dev.youagent.search.ChunkType;
 import dev.youagent.search.CodeRelation;
-import dev.youagent.search.HashEmbeddingModel;
+import dev.youagent.search.FeatureHashEmbeddingModel;
 import dev.youagent.search.SqliteCodeIndex;
 import dev.youagent.tool.ToolExecution;
 import dev.youagent.tool.ToolRegistry;
@@ -336,7 +336,7 @@ final class BenchmarkScenarios {
     }
 
     private SqliteCodeIndex index(Path workspace) throws Exception {
-        return new SqliteCodeIndex(workspace, workspace.resolve(".data/index.db"), new HashEmbeddingModel(128));
+        return new SqliteCodeIndex(workspace, workspace.resolve(".data/index.db"), new FeatureHashEmbeddingModel(128));
     }
 
     private void writeSearchFixture(Path workspace) throws IOException {

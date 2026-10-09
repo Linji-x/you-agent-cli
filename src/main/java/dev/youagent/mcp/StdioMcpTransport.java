@@ -20,6 +20,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 public final class StdioMcpTransport implements McpTransport {
     private final List<String> command;
@@ -34,6 +35,7 @@ public final class StdioMcpTransport implements McpTransport {
     private Process process;
     private BufferedReader reader;
     private BufferedWriter writer;
+    private final AtomicBoolean closed = new AtomicBoolean();
 
     public StdioMcpTransport(List<String> command, Path workspace, Map<String, String> environment) {
         if (command == null || command.isEmpty()) {
@@ -71,6 +73,7 @@ public final class StdioMcpTransport implements McpTransport {
             return future.get(timeout.toMillis(), TimeUnit.MILLISECONDS);
         } catch (TimeoutException timeoutFailure) {
             future.cancel(true);
+            abort();
             throw new IOException("MCP stdio request timed out after " + timeout.toMillis() + "ms", timeoutFailure);
         } catch (InterruptedException interrupted) {
             Thread.currentThread().interrupt();
@@ -92,6 +95,21 @@ public final class StdioMcpTransport implements McpTransport {
 
     @Override
     public synchronized void close() throws IOException {
+        abort();
+    }
+
+    boolean isClosed() {
+        return closed.get();
+    }
+
+    boolean awaitReaderTermination(Duration timeout) throws InterruptedException {
+        return readerExecutor.awaitTermination(timeout.toMillis(), TimeUnit.MILLISECONDS);
+    }
+
+    private void abort() {
+        if (!closed.compareAndSet(false, true)) {
+            return;
+        }
         if (writer != null) {
             try {
                 writer.close();
@@ -99,9 +117,11 @@ public final class StdioMcpTransport implements McpTransport {
             }
         }
         if (process != null) {
+            process.descendants().forEach(ProcessHandle::destroy);
             process.destroy();
             try {
                 if (!process.waitFor(1, TimeUnit.SECONDS)) {
+                    process.descendants().forEach(ProcessHandle::destroyForcibly);
                     process.destroyForcibly();
                 }
             } catch (InterruptedException interrupted) {
@@ -133,7 +153,7 @@ public final class StdioMcpTransport implements McpTransport {
     }
 
     private void ensureStarted() throws IOException {
-        if (process == null || !process.isAlive()) {
+        if (closed.get() || process == null || !process.isAlive()) {
             throw new IOException("MCP stdio transport is not running");
         }
     }
